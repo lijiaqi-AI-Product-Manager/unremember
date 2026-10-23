@@ -7,6 +7,7 @@
 > 定向删掉一段内容，连同它的复述和会话外副本，然后用追问证明它真的忘了。  
 
 [![CI](https://github.com/lijiaqimun-coder/unremember/actions/workflows/ci.yml/badge.svg)](https://github.com/lijiaqimun-coder/unremember/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/unremember.svg)](https://www.npmjs.com/package/unremember)
 [![Release](https://img.shields.io/github/v/release/lijiaqimun-coder/unremember?display_name=tag)](https://github.com/lijiaqimun-coder/unremember/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/lijiaqimun-coder/unremember/blob/main/LICENSE)
 [![Node](https://img.shields.io/badge/node-%3E%3D22.19-339933)](package.json)
@@ -35,14 +36,14 @@ Deleting a message from the UI is not forgetting:
 
 ## Install / Download
 
-### npm (staged, pending 2FA approval)
-
-The package name `unremember` has a staged 1.0.2 release. Until a maintainer approves it with 2FA on npmjs.com, `npm install -g unremember` may install a 0.0.0-stage placeholder. Use the GitHub Release below for now. After approval:
+### npm
 
 ```bash
 npm install -g unremember
 unremember --version
 ```
+
+The registry currently serves **1.0.0** as `latest`. A 1.0.2 release is staged and awaits maintainer 2FA approval; until approved, pin `unremember@1.0.0` if you need a reproducible version. The GitHub Release below is the 1.0.2 build.
 
 One-shot:
 
