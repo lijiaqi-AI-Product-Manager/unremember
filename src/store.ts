@@ -54,15 +54,17 @@ export class Store {
   }
 
   private planFile(id: string) {
+    if (!safeSegment(id)) throw new Error(`invalid plan id: ${id}`)
     return join(this.dir, 'plans', `${id}.json`)
   }
 
   private backupDir(id: string) {
+    if (!safeSegment(id)) throw new Error(`invalid plan id: ${id}`)
     return join(this.dir, 'backups', id)
   }
 
   private pendingFile(sessionId: string) {
-    return join(this.dir, 'pending', `${sessionId}.json`)
+    return join(this.dir, 'pending', `${safeSessionSegment(sessionId)}.json`)
   }
 
   savePlan(plan: Plan) {
@@ -174,4 +176,12 @@ export class Store {
       })
       .filter((p): p is PendingRequest => p !== undefined)
   }
+}
+
+function safeSegment(value: string): boolean {
+  return /^[A-Za-z0-9][A-Za-z0-9._-]{0,120}$/.test(value)
+}
+
+function safeSessionSegment(value: string): string {
+  return value.replace(/[^A-Za-z0-9._-]/g, '_').slice(0, 120)
 }

@@ -1,0 +1,63 @@
+name: Bug report
+description: Something failed, leaked, or corrupted a session.
+title: '[bug] '
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do **not** paste real secrets, real transcripts, or credentials.
+        Use a synthetic canary such as `青柠绿-7429` and redact paths/usernames.
+  - type: input
+    id: version
+    attributes:
+      label: unremember version / commit
+      placeholder: v0.1.0 or 9e09fea
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - Claude Code
+        - dsh
+        - both
+        - docs / packaging
+    validations:
+      required: true
+  - type: textarea
+    id: command
+    attributes:
+      label: Command
+      description: The exact command, with paths and canaries redacted.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior / error
+      description: Include only the first ~30 lines of stderr. Never attach a real transcript.
+    validations:
+      required: true
+  - type: input
+    id: env
+    attributes:
+      label: OS / Node / agent version
+      placeholder: Windows 11, Node 24.22, Claude Code 2.1.309
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety
+      options:
+        - label: I used a test home (`CLAUDE_CONFIG_DIR` / `DSH_HOME`) or a synthetic session.
+          required: true
+        - label: I have not included real secrets, tokens, or private conversation content.
+          required: true

@@ -1,124 +1,268 @@
 # unremember
 
-> 给本地 coding agent 一碗孟婆汤：定向删掉一段内容，连同它的复述和会话外副本，再用追问证明它真的忘了。
+> **Give a local coding agent a bowl of amnesia.**  
+> 定向删掉一段内容，连同它的复述和会话外副本，然后用追问证明它真的忘了。
 
-`unremember` 处理的是**本地会话**：Claude Code 和 dsh（DeepSeek Harness）。它不是“清空聊天”：它会先出计划，逐文件校验、备份、原子写入，然后在 fork 上追问，给出泄漏率。
+[![CI](https://github.com/lijiaqimun-coder/unremember/actions/workflows/ci.yml/badge.svg)](https://github.com/lijiaqimun-coder/unremember/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/lijiaqimun-coder/unremember?display_name=tag)](https://github.com/lijiaqimun-coder/unremember/releases)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Node](https://img.shields.io/badge/node-%3E%3D22.19-339933)](package.json)
 
-## 状态
+`unremember` is a local-first privacy tool for **Claude Code** and **dsh** (DeepSeek Harness). It does not just delete a chat row. It removes the target from the transcript, its echoes, and the off-session copies, then verifies the result on a fork.
 
-- MVP：Claude Code（≥ 2.1.30x）与 dsh（0.2.x，session v4）。
-- 不做：Codex、国内平台、云端会话、正在运行的会话。Codex 0.164 只接受 Responses API，当前没有可用的测试 provider（见 `docs/调研/调研结果-03-补充实验.md`）。
-- 所有实验和实现都不依赖官方私有 API；直接读写本地格式，格式不认识时拒绝执行。
-
-## 安装
-
-```bash
-npm install
-npm run build
-node dist/cli.js --help
+```
+plan → inspect → backup → apply → verify → rollback if needed
 ```
 
-也可以 `npm link` 后直接使用 `unremember`。Node.js ≥ 22.19。
+No server, no account, no telemetry. It reads and writes the files you already own.
 
-## 快速开始
+---
+
+## Why
+
+Deleting a message from the UI is not forgetting:
+
+- Claude Code keeps the transcript, `history.jsonl`, auto-memory, `file-history`, API request blobs and compact summaries.
+- dsh duplicates prompts into `agent/inbox/spliced`, keeps old generations, Zstandard logs and storage caches.
+- A running agent has already loaded the old context into memory; editing the file underneath it is not enough.
+- Compaction can replace old messages with a summary — the summary is a **new copy** of the secret.
+- Verification must happen on a fork, otherwise the questions themselves pollute the original session.
+
+`unremember` treats all of these as first-class stores, refuses formats it does not understand, and gives you a plan before touching anything.
+
+## Install / Download
+
+### GitHub Release
+
+Download the latest source tarball from [Releases](https://github.com/lijiaqimun-coder/unremember/releases). The release asset is a ready-to-install package (built `dist/` included):
 
 ```bash
-# 列出本机会话（Claude Code 的 CLAUDE_CONFIG_DIR、dsh 的 DSH_HOME 会自动读取）
+npm install -g ./unremember-0.1.0.tgz
+unremember --version
+```
+
+### Install directly from GitHub
+
+```bash
+npm install -g github:lijiaqimun-coder/unremember
+unremember --help
+```
+
+`prepare` builds the TypeScript source during install. If your npm blocks lifecycle scripts, clone and build manually:
+
+```bash
+git clone https://github.com/lijiaqimun-coder/unremember.git
+cd unremember
+npm ci
+npm run build
+npm link
+```
+
+### One-shot
+
+```bash
+npx github:lijiaqimun-coder/unremember --help
+```
+
+### npm registry
+
+The package is **not yet published to npmjs.com**. GitHub Releases / GitHub install are the supported download paths for v0.1.0.
+
+### 国内加速
+
+下面的 GitHub 代理和 npm 镜像都是第三方服务，可用性不由本项目保证；公司网络可能禁止：
+
+```bash
+# GitHub 代理（示例，第三方）
+git clone https://ghproxy.net/https://github.com/lijiaqimun-coder/unremember.git
+cd unremember
+
+# 依赖走 npmmirror
+npm --registry=https://registry.npmmirror.com ci
+npm run build
+npm link
+```
+
+Release 包也可以用同样前缀下载：
+
+```text
+https://ghproxy.net/https://github.com/lijiaqimun-coder/unremember/releases/download/v0.1.0/unremember-0.1.0.tgz
+```
+
+## Quick start
+
+```bash
+# 1. 看本机会话；Claude Code 读 CLAUDE_CONFIG_DIR，dsh 读 DSH_HOME
 unremember sessions
 unremember sessions --platform cc --cwd "C:\work\my-project"
 
-# 先 dry-run：只出计划，不改文件
+# 2. 只出计划，不动文件
 unremember plan last --text "青柠绿-7429"
 
-# 确认计划后执行；会先备份
+# 3. 检查计划后执行；会备份、复核 sha256、原子写入
 unremember apply 20261024-000620-ac72 --yes
 
-# 在 fork 上追问，不污染原会话
-unremember verify 20261011-... --canary "青柠绿-7429"
+# 4. 在 fork 上追问 20 个问题，不污染原会话
+unremember verify 218bacb4-... --canary "青柠绿-7429"
 
-# 后悔了
+# 5. 后悔了
 unremember rollback 20261024-000620-ac72
 unremember backups
 unremember purge-backups --yes
 ```
 
-`<会话>` 支持完整 id、id 前缀、transcript 路径，或 `last`。`plan` 默认按回合删除；只想切掉命中的句子时用 `--scope span`。
+`<session>` accepts a full id, an id prefix, a transcript path, or `last` (most recent session for the current cwd).
 
-## 它会清什么
-
-Claude Code：
-
-- 主 transcript、子代理 transcript
-- `history.jsonl`
-- project memory（`MEMORY.md` 和主题文件；删主题文件时同步删索引行）
-- `file-history` 快照、`paste-cache`、`tool-results`
-- `api-request` / `api-request-blob`（整行删除，实验证明不参与恢复）
-- `last-prompt` 的 `leafUuid`、`parentUuid` / `logicalParentUuid` 断链修复
-- compact summary（`isCompactSummary`）里的命中按句改写
-- 同一 `message.id` 下的 thinking/text/tool_use，以及 tool_use ↔ tool_result 的配对闭包
-
-dsh：
-
-- 当前 `session.v4.jsonl[.zstd]` 与历史 generation
-- `agent/inbox/spliced`、`user/message`、`assistant/message` 的正文
-- `assistant/message.data.stream`、`message.source.replayState`
-- `session/title*`、`compaction/summary` 的 summary/rawOutput
-- `storages` 里带 session id 的投影缓存、`attachments` 文本
-
-dsh **绝不删行、绝不重排 seq**：只抹字段；`.zstd` 写回时 header 单独一帧、其余事件一帧，两个 frame 都带 checksum。
-
-## 计划、备份与恢复
-
-`plan` 只写 `~/.unremember/plans/<id>.json`，计划里只有：
-
-- 目标文本的 sha256（不存原文）
-- 命中的操作（文件、行、JSON pointer、span）
-- 出计划时每个文件的 sha256
-- blockers 和模拟执行后的 `residualHits`
-
-`apply` 会：
-
-1. 检查会话是否正在运行；检测失败按“正在运行”处理；
-2. 复核每个文件的 sha256；
-3. 备份到 `~/.unremember/backups/<id>/`；
-4. 原子写入；
-5. 写 `journal.jsonl`。
-
-`rollback <id>` 按 manifest 还原并复核哈希。`purge-backups` 会永久删掉备份（删除后无法 rollback）。
-
-## 验证
-
-`verify` 只在 fork 上做：
-
-- Claude Code：`claude -p ... --resume <id> --fork-session`；结束后删掉 fork 文件。
-- dsh：复制 session 目录、换新 id、替换文件里所有旧 id（header 与 `delivery-accepted.data.sessionId` 等），运行后删掉。
-
-20 个探针分 5 类（直接问、间接提示、列全部对话、原样输出上下文、查文件和 memory）。任意回答出现目标字面变体即记为泄漏；退出码 0 表示没有字面泄漏，1 表示有泄漏或探针执行失败。
-
-## 隐私
-
-- 默认离线，只做精确匹配；`--semantic` 目前没有配置裁判/定位模型时会明确提示。
-- 计划、日志、journal 不保存目标原文。
-- 备份保存原文，这是 rollback 必需的；确认无误后执行 `purge-backups`。
-- skill 写入的 `~/.unremember/pending/<sessionId>.json` 含待确认字面文本，权限 0600；`resume` 消费后删除。
-
-## 开发
+### Plan options
 
 ```bash
+# 默认按回合删：用户提示 + 模型回复 + 工具调用/结果
+unremember plan last --text "secret"
+
+# 只抹掉命中的那句话，保留回合结构
+unremember plan last --text "secret" --scope span
+
+# 按 Claude uuid / dsh seq 删除
+unremember plan last --message <uuid-or-seq>
+```
+
+## Commands
+
+| Command | Purpose |
+|---|---|
+| `sessions` | List Claude Code / dsh sessions. `--platform cc\|dsh`, `--cwd`, `--json`. |
+| `plan` | Dry-run. Scan stores, build ops, simulate residual, write a plan. `--text`, `--message`, `--about`, `--scope`, `--json`. |
+| `apply` | Execute a plan after live check, hash check and backup. Requires `--yes`. |
+| `verify` | Run 20 probes on a fork. Exit 0 = no literal leak; 1 = leak/error. |
+| `resume` | Consume a pending skill request, apply it, then resume Claude Code (dsh prints the profile-aware resume command). |
+| `rollback` | Restore all files in a plan from its backup and verify hashes. |
+| `backups` | List backups. |
+| `purge-backups` | Delete backups permanently. Requires `--yes`. |
+
+## What it cleans
+
+### Claude Code
+
+| Store | Action |
+|---|---|
+| main transcript / subagents | delete affected turns or redact spans; relink `parentUuid` and `logicalParentUuid` |
+| `history.jsonl` | delete matching prompt-history lines for this session |
+| project memory | redact, or delete a dedicated memory file and remove its `MEMORY.md` index line |
+| `file-history`, `paste-cache`, `tool-results` | redact matching text |
+| `api-request`, `api-request-blob` | delete the matching line |
+| compact summary (`isCompactSummary`) | rewrite the summary; do not load compressed-away rows on resume |
+| tool calls | close the `tool_use` ↔ `tool_result` pair; remove thinking blocks instead of editing signed content |
+| `last-prompt`, `ai-title` | redact/retitle and repair the leaf pointer |
+
+### dsh (session v4)
+
+| Store | Action |
+|---|---|
+| `session.v4.jsonl[.zstd]` + old generations | blank text fields; **never delete rows or change seq** |
+| `agent/inbox/spliced` | blank duplicated prompt content |
+| `assistant/message` | blank content, clear `data.stream`, clear `source.replayState` |
+| titles / compaction summaries | redact title and summary/rawOutput |
+| storage caches / attachments | redact matching text |
+| `.zstd` write-back | header line in one checksummed frame, remaining events in a second frame |
+
+## Safety model
+
+`unremember` is deliberately conservative:
+
+1. **Dry-run by default.** `apply` needs `--yes`.
+2. **Live check.** Claude Code uses `sessions/<pid>.json` + pid liveness; dsh uses the `session.lock` flock on POSIX and the named kernel semaphore on Windows. Unknown/live state blocks apply.
+3. **Hash preflight.** Every touched file is hashed at plan time and rechecked at apply time.
+4. **Backup first.** `~/.unremember/backups/<plan-id>/` contains the original files.
+5. **Atomic write.** Temp file + rename; dsh re-encodes in the platform's frame layout.
+6. **Blockers.** Unknown entry types, mixed dsh encodings, dangling parents, unpaired tools, or residual exact hits stop apply.
+7. **Verify on a fork.** The original session is never used for the leak probes.
+
+## Verification
+
+```bash
+unremember verify <session> --canary "青柠绿-7429"
+```
+
+- 20 probes, 5 categories: direct, indirect, list-all, raw-context, memory/files.
+- A literal canary in any answer is a leak.
+- Claude Code: `claude -p --resume <id> --fork-session`; the fork file is deleted afterwards.
+- dsh: session directory copy with a new id and all id references rewritten; cleanup afterwards.
+- Exit code 0 only when there are no literal leaks and no probe errors.
+
+`--semantic` is accepted but this build does **not** ship a semantic judge; it prints a notice and uses literal matching. See [Known limits](#known-limits).
+
+## Architecture
+
+```mermaid
+flowchart LR
+  CLI[CLI] --> Sessions[sessions]
+  CLI --> Plan[plan]
+  Plan --> Claude[Claude adapter]
+  Plan --> Dsh[dsh adapter]
+  Claude --> Stores[(transcript / memory / history / file-history / API blobs)]
+  Dsh --> Stores2[(v4 log / old generations / storages / attachments)]
+  Plan --> Sim[apply in memory + residual scan]
+  Sim --> PlanFile[(~/.unremember/plans)]
+  PlanFile --> Apply[apply]
+  Apply --> Backup[(backups)]
+  Apply --> Write[atomic write / zstd re-encode]
+  CLI --> Verify[verify on fork]
+```
+
+Source layout:
+
+```text
+src/
+  claude.ts       Claude Code adapter + plan logic
+  dsh.ts          dsh adapter + live-lock + fork
+  apply-core.ts   shared apply, hash preflight, backup, atomic write
+  plan.ts         plan construction / formatting
+  verify.ts       20 probes + fork runner
+  sessions.ts     cross-platform session lookup
+  store.ts        plans, backups, pending, journal
+  text.ts         NFKC/zero-width matching, JSON pointers, redaction
+  ops.ts          JSONL/text operation executor
+  cli.ts          command line
+```
+
+## Known limits
+
+- **Not for running sessions.** Editing a live session does not change the context already loaded in memory. The tool refuses while live.
+- **Not a server-side eraser.** Cloud retention, telemetry, backups, model weights, and other machines are outside the promise.
+- **Not a code/secret scanner.** If the canary was written into project files or committed to git, `unremember` does not rewrite your repository.
+- **No semantic matching yet.** Paraphrases and euphemisms require a configured model; `--semantic` currently warns and falls back to literal matching.
+- **No Codex adapter.** Codex 0.164 only accepts the Responses API; no compatible test provider was available. See `docs/调研/调研结果-03-补充实验.md`.
+- **No npm registry release yet.** Use GitHub Releases or `npm install -g github:...`.
+- **dsh resume is a command hint.** The CLI prints the profile-aware resume command instead of guessing a desktop/web profile.
+
+## FAQ
+
+**Does it upload my session?**  
+No. Default operation is offline. Only an explicitly configured semantic backend would receive excerpts, and that is not enabled in this release.
+
+**Does it delete the whole chat?**  
+No. It deletes the affected turn or, with `--scope span`, the matched span. Other turns stay.
+
+**Why is the plan file safe?**  
+The plan stores target SHA-256, not the literal target. Backups contain originals by design; run `purge-backups` when done.
+
+**What if the format changes?**  
+Unknown entry types are still scanned, but a hit inside one is a blocker. `apply` refuses rather than guessing.
+
+**Can I use it on macOS/Linux?**  
+Yes. Claude Code and dsh paths are resolved from the standard home/config env vars; tests run on Linux CI and Windows locally.
+
+## Development
+
+```bash
+npm ci
 npm test
 npm run typecheck
 npm run build
 ```
 
-测试使用临时目录和合成 transcript，不读写真实 home。格式调研、实验和未确认项在 `docs/调研/`。
-
-## 已知边界
-
-- 正在运行的会话不会重新读文件，必须退出后执行；工具会拒绝 live/unknown 状态。
-- 服务端、遥测、模型权重、已经提交到 git 的内容、其他机器不在承诺范围内。
-- 目标若被模型改写成语义等价但字面不同，当前默认不命中；这属于 `--semantic` 的路线。
-- 官方格式随时可能变；遇到未知条目类型时，`plan` 仍会扫描，但 `apply` 会拒绝。
+Tests use synthetic sessions and temporary directories. Real sessions, credentials and usernames must never be committed. See [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md).
 
 ## License
 
-MIT
+MIT. See [LICENSE](LICENSE).

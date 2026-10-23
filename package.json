@@ -35,7 +35,8 @@
     "build": "tsc -p tsconfig.json",
     "prepack": "npm run build",
     "test": "vitest run",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "prepare": "npm run build"
   },
   "keywords": [
     "claude-code",
