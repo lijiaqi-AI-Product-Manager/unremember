@@ -1,0 +1,7 @@
+node_modules/
+dist/
+coverage/
+*.log
+*.tmp
+# Raw experiment runs: test homes may hold provider credentials and third-party bundles.
+experiments/

@@ -1,0 +1,54 @@
+{
+  "name": "unremember",
+  "version": "0.1.0",
+  "description": "Make a local coding agent truly forget something: remove it from the session, its echoes and its off-session copies (memory, prompt history), then prove it with leak probes.",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lijiaqimun-coder/unremember.git"
+  },
+  "homepage": "https://github.com/lijiaqimun-coder/unremember#readme",
+  "bugs": "https://github.com/lijiaqimun-coder/unremember/issues",
+  "bin": {
+    "unremember": "dist/cli.js"
+  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=22.19"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "prepack": "npm run build",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "keywords": [
+    "claude-code",
+    "deepseek-harness",
+    "dsh",
+    "agent",
+    "context",
+    "privacy",
+    "forget",
+    "transcript"
+  ],
+  "devDependencies": {
+    "@types/node": "^22.18.0",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  }
+}
