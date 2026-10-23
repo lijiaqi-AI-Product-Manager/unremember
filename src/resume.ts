@@ -13,7 +13,8 @@ export async function resumeSession(session: SessionRef, opts: { yes?: boolean; 
     return 1
   }
   const adapter = session.platform === 'claude-code' ? new ClaudeAdapter() : new DshAdapter()
-  const { draft } = await adapter.plan(session, pending.target, { scope: 'turn' })
+  const semantic = Boolean(pending.target.about && !pending.target.text?.length && !pending.target.messageIds?.length)
+  const { draft } = await adapter.plan(session, pending.target, { scope: 'turn', semantic })
   const plan = buildPlan(opts.store, draft, pending.target)
   opts.store.savePlan(plan)
   if (!opts.yes) {

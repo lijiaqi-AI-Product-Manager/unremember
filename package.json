@@ -1,6 +1,6 @@
 {
   "name": "unremember",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Make a local coding agent truly forget something: remove it from the session, its echoes and its off-session copies (memory, prompt history), then prove it with leak probes.",
   "type": "module",
   "license": "MIT",
@@ -27,8 +27,14 @@
     "README.md",
     "LICENSE",
     "skills",
-    "assets"
+    "assets",
+    "CONTRIBUTING.md",
+    "SECURITY.md",
+    "CHANGELOG.md"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "engines": {
     "node": ">=22.19"
   },
@@ -52,8 +58,8 @@
   ],
   "devDependencies": {
     "@types/node": "^22.18.0",
-    "@vitest/coverage-v8": "^3.2.7",
+    "@vitest/coverage-v8": "^5.0.5",
     "typescript": "^5.9.2",
-    "vitest": "^3.2.4"
+    "vitest": "^5.0.5"
   }
 }

@@ -40,7 +40,7 @@ Deleting a message from the UI is not forgetting:
 Download the latest package tarball from [Releases](https://github.com/lijiaqimun-coder/unremember/releases). The release asset is a ready-to-install package (built `dist/` included):
 
 ```bash
-npm install -g ./unremember-0.1.0.tgz
+npm install -g ./unremember-1.0.0.tgz
 unremember --version
 ```
 
@@ -69,7 +69,7 @@ npx github:lijiaqimun-coder/unremember --help
 
 ### npm registry
 
-The package is **not yet published to npmjs.com**. GitHub Releases / GitHub install are the supported download paths for v0.1.0.
+The package is **not yet published to npmjs.com**. GitHub Releases / GitHub install are the supported download paths for v1.0.0.
 
 ### 国内加速
 
@@ -89,7 +89,7 @@ npm link
 Release 包也可以用同样前缀下载：
 
 ```text
-https://ghproxy.net/https://github.com/lijiaqimun-coder/unremember/releases/download/v0.1.0/unremember-0.1.0.tgz
+https://ghproxy.net/https://github.com/lijiaqimun-coder/unremember/releases/download/v1.0.0/unremember-1.0.0.tgz
 ```
 
 ## Quick start
@@ -155,6 +155,7 @@ ops 7  files 4  residual 0
 
 | Command | Purpose |
 |---|---|
+| `doctor` | Print Node, config dirs, semantic/encryption state, backup and session counts. |
 | `sessions` | List Claude Code / dsh sessions. `--platform cc\|dsh`, `--cwd`, `--json`. |
 | `pending` | Store a confirmed skill request under `~/.unremember/pending/` for `resume`. |
 | `plan` | Dry-run. Scan stores, build ops, simulate residual, write a plan. `--text`, `--message`, `--about`, `--scope`, `--semantic`, `--json`, `--yes`. |
@@ -215,7 +216,7 @@ unremember verify <session> --canary "青柠绿-7429"
 - dsh: session directory copy with a new id and all id references rewritten; cleanup afterwards.
 - Exit code 0 only when there are no literal leaks and no probe errors.
 
-`--semantic` uses a configured OpenAI-chat-compatible endpoint for paraphrases and the leak judge. Without configuration it prints a notice and falls back to literal matching.
+`--semantic` uses a configured OpenAI-chat-compatible endpoint for paraphrases and the leak judge. Without configuration, `plan --semantic` fails clearly; `verify --semantic` warns and uses literal judgment.
 
 ## Encryption at rest
 
