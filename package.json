@@ -26,7 +26,8 @@
     "dist",
     "README.md",
     "LICENSE",
-    "skills"
+    "skills",
+    "assets"
   ],
   "engines": {
     "node": ">=22.19"

@@ -1,7 +1,10 @@
 # unremember
 
-> **Give a local coding agent a bowl of amnesia.**  
-> 定向删掉一段内容，连同它的复述和会话外副本，然后用追问证明它真的忘了。
+<p align="center"><img src="assets/logo.svg" width="112" alt="unremember logo"></p>
+
+<p align="center"><strong>Give a local coding agent a bowl of amnesia.</strong></p>
+
+> 定向删掉一段内容，连同它的复述和会话外副本，然后用追问证明它真的忘了。  
 
 [![CI](https://github.com/lijiaqimun-coder/unremember/actions/workflows/ci.yml/badge.svg)](https://github.com/lijiaqimun-coder/unremember/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/lijiaqimun-coder/unremember?display_name=tag)](https://github.com/lijiaqimun-coder/unremember/releases)
@@ -34,7 +37,7 @@ Deleting a message from the UI is not forgetting:
 
 ### GitHub Release
 
-Download the latest source tarball from [Releases](https://github.com/lijiaqimun-coder/unremember/releases). The release asset is a ready-to-install package (built `dist/` included):
+Download the latest package tarball from [Releases](https://github.com/lijiaqimun-coder/unremember/releases). The release asset is a ready-to-install package (built `dist/` included):
 
 ```bash
 npm install -g ./unremember-0.1.0.tgz
@@ -126,15 +129,38 @@ unremember plan last --text "secret" --scope span
 unremember plan last --message <uuid-or-seq>
 ```
 
+## What it looks like
+
+```text
+$ unremember plan last --text "青柠绿-7429"
+plan 20261024-000620-ac72
+session claude-code:218bacb4-...
+format claude-code 2.1.309
+ops 7  files 4  residual 0
+...
+  ~ set :4/parentUuid
+  - delete :2
+  - delete :3
+  - delete file  .../memory/secret.md
+  ~ redact .../history.jsonl:1
+...
+命中 5 处（只显示脱敏摘录）：
+  cc-transcript  记住一个暗号：[青柠█-74██]...
+  cc-memory      The secret is [青柠█-74██].
+```
+
+`plan` is always a dry run. `apply` is the only command that writes, and it refuses if a file changed since the plan was made.
+
 ## Commands
 
 | Command | Purpose |
 |---|---|
 | `sessions` | List Claude Code / dsh sessions. `--platform cc\|dsh`, `--cwd`, `--json`. |
+| `pending` | Store a confirmed skill request under `~/.unremember/pending/` for `resume`. |
 | `plan` | Dry-run. Scan stores, build ops, simulate residual, write a plan. `--text`, `--message`, `--about`, `--scope`, `--json`. |
 | `apply` | Execute a plan after live check, hash check and backup. Requires `--yes`. |
 | `verify` | Run 20 probes on a fork. Exit 0 = no literal leak; 1 = leak/error. |
-| `resume` | Consume a pending skill request, apply it, then resume Claude Code (dsh prints the profile-aware resume command). |
+| `resume` | Consume a pending request, apply it, then resume Claude Code (dsh prints the profile-aware resume command). |
 | `rollback` | Restore all files in a plan from its backup and verify hashes. |
 | `backups` | List backups. |
 | `purge-backups` | Delete backups permanently. Requires `--yes`. |

@@ -11,7 +11,11 @@ description: Let a local Claude Code or dsh agent truly forget a confirmed secre
 
 1. **先确认目标**：让用户明确要忘的原文、消息 id 或描述；不要猜。
 2. **不要在会话运行时改文件**：当前 agent 已经把上下文加载进内存，改了也不会生效。
-3. 写一条待办请求到 `~/.unremember/pending/<sessionId>.json`：
+3. 写一条待办请求。优先用 CLI：
+   ```bash
+   unremember pending <session-id> --text "<经用户确认的原文>"
+   ```
+   或者写 `~/.unremember/pending/<sessionId>.json`：
    ```json
    {
      "v": 1,

@@ -14,6 +14,7 @@ const USAGE = `unremember — 让 agent 真的忘掉一件事
 
 用法：
   unremember sessions [--platform cc|dsh] [--cwd <目录>] [--json]
+  unremember pending <会话> (--text <内容>... | --message <id>... | --about <描述>)
   unremember plan <会话> (--text <内容>... | --message <id>... | --about <描述>) [--scope turn|span] [--semantic] [--json]
   unremember apply <plan-id> [--yes]
   unremember verify <会话> --canary <内容>... [--probes 20] [--semantic]
@@ -78,6 +79,17 @@ async function main(argv: string[]): Promise<number> {
         if (s.preview) console.log(`  ${s.preview}`)
         if (s.projectDir) console.log(`  ${s.projectDir}`)
       }
+      return 0
+    }
+    case 'pending': {
+      const query = rest[0]
+      if (!query) return fail('需要会话 id、前缀或 last。')
+      const target = parseTarget(values)
+      const platform = parsePlatform(values.platform)
+      const { session } = findSession(query, { platform, cwd: values.cwd })
+      store.savePending({ v: 1, platform: session.platform, sessionId: session.sessionId, createdAt: Date.now(), target })
+      console.log(`待办已写：${store.dir}/pending/${session.sessionId}.json`)
+      console.log(`退出当前会话后运行：unremember resume ${session.sessionId} --yes`)
       return 0
     }
     case 'plan': {
