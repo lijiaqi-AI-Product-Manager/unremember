@@ -43,7 +43,7 @@ npm install -g unremember
 unremember --version
 ```
 
-The registry currently serves **1.0.0** as `latest`. A 1.0.2 release is staged and awaits maintainer 2FA approval; until approved, pin `unremember@1.0.0` if you need a reproducible version. The GitHub Release below is the 1.0.2 build.
+The registry serves **1.0.2** as `latest`. The GitHub Release below is the same 1.0.2 build.
 
 One-shot:
 
