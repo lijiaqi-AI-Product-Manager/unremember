@@ -1,5 +1,5 @@
 export * from './types.js'
-export { JsonlFile, encodeDshLog, readDshLog, sha256, sha256File, writeAtomic } from './fsx.js'
+export { JsonlFile, decodeDshLog, encodeDshLog, readDshLog, sha256, sha256File, writeAtomic } from './fsx.js'
 export { excerpt, findSpans, fold, getAt, mask, redact, setAt, stringLeaves } from './text.js'
 export { Store } from './store.js'
 export { claudeConfigDir, dataHome, dshHome } from './paths.js'

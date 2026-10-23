@@ -95,7 +95,58 @@ export function isZstd(file: string): boolean {
 
 export function readDshLog(file: string): string {
   const buf = readFileSync(file)
-  return isZstd(file) ? zstdDecompressSync(buf).toString('utf8') : buf.toString('utf8')
+  return isZstd(file) ? decodeDshLog(buf) : buf.toString('utf8')
+}
+
+/** Decode every concatenated Zstandard frame. Node's sync decoder stops at the first frame on some platforms. */
+export function decodeDshLog(buf: Buffer): string {
+  const chunks: Buffer[] = []
+  let offset = 0
+  while (offset < buf.length) {
+    if (buf.length - offset >= 4 && buf.readUInt32LE(offset) === 0xfd2fb528) {
+      const length = zstdFrameLength(buf, offset)
+      chunks.push(zstdDecompressSync(buf.subarray(offset, offset + length)))
+      offset += length
+    } else if (buf.length - offset >= 8 && (buf.readUInt32LE(offset) & 0xfffffff0) === 0x184d2a50) {
+      const size = buf.readUInt32LE(offset + 4)
+      offset += 8 + size
+    } else {
+      throw new Error('corrupt Zstandard session log: unknown frame')
+    }
+  }
+  if (!chunks.length) throw new Error('empty Zstandard session log')
+  return Buffer.concat(chunks).toString('utf8')
+}
+
+function zstdFrameLength(buf: Buffer, offset: number): number {
+  let p = offset + 4
+  if (p >= buf.length) throw new Error('corrupt Zstandard session log: truncated frame header')
+  const descriptor = buf[p++]!
+  if ((descriptor & 0x08) !== 0) throw new Error('corrupt Zstandard session log: reserved frame bit')
+  const fcsFlag = descriptor >>> 6
+  const singleSegment = (descriptor >>> 5) & 1
+  const checksum = (descriptor >>> 2) & 1
+  const dictFlag = descriptor & 3
+  if (!singleSegment) p += 1
+  p += [0, 1, 2, 4][dictFlag] ?? 0
+  const fcsSize = fcsFlag === 0 ? (singleSegment ? 1 : 0) : fcsFlag === 1 ? 2 : fcsFlag === 2 ? 4 : 8
+  p += fcsSize
+  while (true) {
+    if (p + 3 > buf.length) throw new Error('corrupt Zstandard session log: truncated block header')
+    const header = buf[p]! | (buf[p + 1]! << 8) | (buf[p + 2]! << 16)
+    p += 3
+    const last = header & 1
+    const type = (header >>> 1) & 3
+    const size = header >>> 3
+    if (type === 0) p += size
+    else if (type === 1) p += 1
+    else if (type === 2) p += size
+    else throw new Error('corrupt Zstandard session log: reserved block type')
+    if (last) break
+  }
+  if (checksum) p += 4
+  if (p > buf.length) throw new Error('corrupt Zstandard session log: truncated frame')
+  return p - offset
 }
 
 /**

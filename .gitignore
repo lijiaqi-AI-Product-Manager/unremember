@@ -5,3 +5,6 @@ coverage/
 *.tmp
 # Raw experiment runs: test homes may hold provider credentials and third-party bundles.
 experiments/
+
+# Local release tarballs and uploaded artifacts
+.release/

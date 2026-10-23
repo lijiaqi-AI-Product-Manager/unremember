@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { zstdDecompressSync } from 'node:zlib'
-import { JsonlFile, encodeDshLog } from '../src/fsx.js'
+import { JsonlFile, decodeDshLog, encodeDshLog } from '../src/fsx.js'
 
 describe('JsonlFile', () => {
   it('writes untouched lines back byte for byte', () => {
@@ -26,7 +26,7 @@ describe('encodeDshLog', () => {
 
   it('puts the header alone in the first zstd frame', () => {
     const buf = encodeDshLog(text, true)
-    expect(zstdDecompressSync(buf).toString('utf8')).toBe(text)
+    expect(decodeDshLog(buf)).toBe(text)
     // Frame 1 is a complete zstd frame holding only the header line.
     const second = buf.indexOf(Buffer.from([0x28, 0xb5, 0x2f, 0xfd]), 4)
     expect(second).toBeGreaterThan(0)

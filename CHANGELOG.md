@@ -5,7 +5,7 @@
 First public MVP.
 
 - Claude Code adapter: transcript/subagents, history, memory + index, file-history, paste-cache, tool-results, API request blobs, compact summaries, parent/logical-parent relinking, tool-pair closure.
-- dsh adapter: v4 JSONL + Zstandard logs, seq-preserving field redaction, inbox/assistant stream/compaction/title cleanup, two-frame write-back.
+- dsh adapter: v4 JSONL + Zstandard logs, seq-preserving field redaction, inbox/assistant stream/compaction/title cleanup, two-frame write-back. Decodes every concatenated Zstandard frame; Node versions that stop after the first frame no longer truncate the log.
 - CLI: `sessions`, `plan`, `apply`, `verify`, `resume`, `rollback`, `backups`, `purge-backups`.
 - Safety: dry-run by default, live-session refusal, SHA-256 preflight, backups, atomic writes, blocker/residual simulation.
 - Verification: 20 probes across 5 categories on a fork; literal leak rate and exit code.
