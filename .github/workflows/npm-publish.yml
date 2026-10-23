@@ -1,8 +1,6 @@
 name: npm publish
 
 on:
-  push:
-    tags: ['v*']
   workflow_dispatch:
 
 permissions:
@@ -25,5 +23,5 @@ jobs:
       - run: npm test
       - run: npm run typecheck
       - run: npm run build
-      - if: env.NODE_AUTH_TOKEN != ''
+      - if: env.NODE_AUTH_TOKEN
         run: npm publish --provenance --access public
