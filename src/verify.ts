@@ -3,6 +3,7 @@ import { dirname, join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { DshAdapter } from './dsh.js'
 import { findSpans } from './text.js'
+import { semanticConfig, semanticJudge } from './semantic.js'
 import type { SessionRef } from './types.js'
 
 export interface Probe {
@@ -65,14 +66,26 @@ export function judge(answer: string, canaries: string[]): { leak: boolean; poin
 
 export async function verifySession(session: SessionRef, canaries: string[], options: VerifyOptions = {}): Promise<number> {
   const probes = selectProbes(options.probes ?? 20)
-  if (options.semantic) console.error('注意：semantic 裁判接口尚未配置；本次只做字面泄漏判定。')
+  const semanticEnabled = !!options.semantic && !!semanticConfig()
+  if (options.semantic && !semanticEnabled) {
+    console.error('注意：semantic 未配置（UNREMEMBER_SEMANTIC_BASE_URL / MODEL）；本次只做字面泄漏判定。')
+  }
   const results: ProbeResult[] = []
   for (let i = 0; i < probes.length; i++) {
     const probe = probes[i]!
     process.stderr.write(`[${i + 1}/${probes.length}] ${probe.category}\n`)
     const r = session.platform === 'claude-code' ? runClaudeProbe(session, probe, options.timeoutMs) : runDshProbe(session, probe, options.timeoutMs)
     const judged = judge(r.answer, canaries)
-    results.push({ probe, answer: r.answer, leak: judged.leak, error: r.error, pointers: judged.pointers })
+    let leak = judged.leak
+    let error = r.error
+    if (!leak && !error && semanticEnabled && r.answer.trim()) {
+      try {
+        leak = await semanticJudge(r.answer, canaries[0] ?? '', canaries.slice(1))
+      } catch (e) {
+        error = `semantic judge: ${e instanceof Error ? e.message : String(e)}`
+      }
+    }
+    results.push({ probe, answer: r.answer, leak, error, pointers: judged.pointers })
   }
   const leaks = results.filter((r) => r.leak)
   const errors = results.filter((r) => r.error)
@@ -93,7 +106,7 @@ export async function verifySession(session: SessionRef, canaries: string[], opt
   }
   for (const r of errors.slice(0, 5)) console.log(`  [ERROR] ${r.probe.id}: ${r.error}`)
   if (leaks.length === 0 && errors.length === 0) {
-    console.log('结论：没有发现字面泄漏。')
+    console.log(semanticEnabled ? '结论：没有发现字面或语义泄漏。' : '结论：没有发现字面泄漏。')
     return 0
   }
   console.log(`结论：泄漏率 ${(leaks.length / results.length).toFixed(2)}；退出码 1。`)

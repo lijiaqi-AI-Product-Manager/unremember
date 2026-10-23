@@ -33,6 +33,13 @@ describe('encodeDshLog', () => {
     expect(zstdDecompressSync(buf.subarray(0, second)).toString('utf8')).toBe('{"type":"session","version":4,"id":"s1"}\n')
   })
 
+
+  it('rejects corrupt or truncated zstd frames without hanging', () => {
+    for (const buf of [Buffer.from([0x28, 0xb5, 0x2f, 0xfd]), Buffer.from([1, 2, 3, 4]), Buffer.alloc(64, 0xff)]) {
+      expect(() => decodeDshLog(buf)).toThrow()
+    }
+  })
+
   it('leaves plain logs alone', () => {
     expect(encodeDshLog(text, false).toString('utf8')).toBe(text)
   })

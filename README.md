@@ -157,10 +157,10 @@ ops 7  files 4  residual 0
 |---|---|
 | `sessions` | List Claude Code / dsh sessions. `--platform cc\|dsh`, `--cwd`, `--json`. |
 | `pending` | Store a confirmed skill request under `~/.unremember/pending/` for `resume`. |
-| `plan` | Dry-run. Scan stores, build ops, simulate residual, write a plan. `--text`, `--message`, `--about`, `--scope`, `--json`. |
+| `plan` | Dry-run. Scan stores, build ops, simulate residual, write a plan. `--text`, `--message`, `--about`, `--scope`, `--semantic`, `--json`, `--yes`. |
 | `apply` | Execute a plan after live check, hash check and backup. Requires `--yes`. |
 | `verify` | Run 20 probes on a fork. Exit 0 = no literal leak; 1 = leak/error. |
-| `resume` | Consume a pending request, apply it, then resume Claude Code (dsh prints the profile-aware resume command). |
+| `resume` | Consume a pending request, apply it, then resume Claude Code. dsh runs `UNREMEMBER_DSH_RESUME_CMD` when set, otherwise prints the profile-aware command. |
 | `rollback` | Restore all files in a plan from its backup and verify hashes. |
 | `backups` | List backups. |
 | `purge-backups` | Delete backups permanently. Requires `--yes`. |
@@ -198,7 +198,7 @@ ops 7  files 4  residual 0
 1. **Dry-run by default.** `apply` needs `--yes`.
 2. **Live check.** Claude Code uses `sessions/<pid>.json` + pid liveness; dsh uses the `session.lock` flock on POSIX and the named kernel semaphore on Windows. Unknown/live state blocks apply.
 3. **Hash preflight.** Every touched file is hashed at plan time and rechecked at apply time.
-4. **Backup first.** `~/.unremember/backups/<plan-id>/` contains the original files.
+4. **Backup first.** `~/.unremember/backups/<plan-id>/` contains the original files; set `UNREMEMBER_ENCRYPTION_KEY` to encrypt them at rest.
 5. **Atomic write.** Temp file + rename; dsh re-encodes in the platform's frame layout.
 6. **Blockers.** Unknown entry types, mixed dsh encodings, dangling parents, unpaired tools, or residual exact hits stop apply.
 7. **Verify on a fork.** The original session is never used for the leak probes.
@@ -215,7 +215,32 @@ unremember verify <session> --canary "青柠绿-7429"
 - dsh: session directory copy with a new id and all id references rewritten; cleanup afterwards.
 - Exit code 0 only when there are no literal leaks and no probe errors.
 
-`--semantic` is accepted but this build does **not** ship a semantic judge; it prints a notice and uses literal matching. See [Known limits](#known-limits).
+`--semantic` uses a configured OpenAI-chat-compatible endpoint for paraphrases and the leak judge. Without configuration it prints a notice and falls back to literal matching.
+
+## Encryption at rest
+
+Backups and pending requests contain the original text. To encrypt them, set a passphrase or a key file:
+
+```bash
+export UNREMEMBER_ENCRYPTION_KEY="a long random passphrase"
+# or: export UNREMEMBER_ENCRYPTION_KEY_FILE="$HOME/.config/unremember.key"
+```
+
+New backups/pending files use AES-256-GCM with a random salt per object. Existing plaintext files remain readable; rollback of an encrypted backup requires the same key and fails closed if it is missing or wrong. **Losing the key loses the ability to roll back.**
+
+## Semantic matching
+
+Literal matching is the default and never sends session content anywhere. Semantic matching is opt-in and requires an OpenAI-chat-compatible endpoint:
+
+```bash
+export UNREMEMBER_SEMANTIC_BASE_URL="https://api.deepseek.com/v1"
+export UNREMEMBER_SEMANTIC_MODEL="deepseek-chat"
+export UNREMEMBER_SEMANTIC_API_KEY="..."
+```
+
+`UNREMEMBER_SEMANTIC_BASE_URL` may also point at a local Ollama/LM Studio gateway. `plan --semantic` sends candidate excerpts (up to 512 KB, never the whole transcript) to that endpoint and requires `--yes`; `verify --semantic` also asks the endpoint to judge non-literal answers. Credentials are read from the environment, never written to disk.
+
+If no endpoint is configured, `--semantic` fails clearly instead of pretending to be semantic.
 
 ## Architecture
 
@@ -256,15 +281,15 @@ src/
 - **Not for running sessions.** Editing a live session does not change the context already loaded in memory. The tool refuses while live.
 - **Not a server-side eraser.** Cloud retention, telemetry, backups, model weights, and other machines are outside the promise.
 - **Not a code/secret scanner.** If the canary was written into project files or committed to git, `unremember` does not rewrite your repository.
-- **No semantic matching yet.** Paraphrases and euphemisms require a configured model; `--semantic` currently warns and falls back to literal matching.
+- Semantic matching requires a configured endpoint; no model is bundled, so `--semantic` without configuration fails rather than guessing.
 - **No Codex adapter.** Codex 0.164 only accepts the Responses API; no compatible test provider was available. See `docs/调研/调研结果-03-补充实验.md`.
 - **No npm registry release yet.** Use GitHub Releases or `npm install -g github:...`.
-- **dsh resume is a command hint.** The CLI prints the profile-aware resume command instead of guessing a desktop/web profile.
+- **dsh resume needs a launcher.** Set `UNREMEMBER_DSH_RESUME_CMD` (supports `{sessionId}` and `{cwd}`) to let `resume` execute your dsh CLI/web launcher; otherwise it prints the command and never guesses a profile.
 
 ## FAQ
 
 **Does it upload my session?**  
-No. Default operation is offline. Only an explicitly configured semantic backend would receive excerpts, and that is not enabled in this release.
+No by default. The tool is offline unless you explicitly set a semantic endpoint and pass `--semantic`; only then are candidate excerpts sent to that endpoint.
 
 **Does it delete the whole chat?**  
 No. It deletes the affected turn or, with `--scope span`, the matched span. Other turns stay.

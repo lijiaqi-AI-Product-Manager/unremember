@@ -4,6 +4,8 @@ import { applyPlan } from './apply.js'
 import { buildPlan, formatPlan } from './plan.js'
 import { findSession, listSessions } from './sessions.js'
 import { Store } from './store.js'
+import { claudeConfigDir, dshHome } from './paths.js'
+import { semanticConfig } from './semantic.js'
 import type { Platform, PlanOptions, Target } from './types.js'
 import { verifySession } from './verify.js'
 import { resumeSession } from './resume.js'
@@ -13,6 +15,7 @@ const VERSION = '0.1.0'
 const USAGE = `unremember — 让 agent 真的忘掉一件事
 
 用法：
+  unremember doctor
   unremember sessions [--platform cc|dsh] [--cwd <目录>] [--json]
   unremember pending <会话> (--text <内容>... | --message <id>... | --about <描述>)
   unremember plan <会话> (--text <内容>... | --message <id>... | --about <描述>) [--scope turn|span] [--semantic] [--json]
@@ -81,6 +84,23 @@ async function main(argv: string[]): Promise<number> {
       }
       return 0
     }
+    case 'doctor': {
+      console.log(`unremember ${VERSION}`)
+      console.log(`node       ${process.version}  ${process.platform}/${process.arch}`)
+      console.log(`claude dir ${claudeConfigDir()}`)
+      console.log(`dsh home   ${dshHome()}`)
+      console.log(`semantic   ${semanticConfig() ? 'configured' : 'off'}`)
+      console.log(`encryption ${process.env.UNREMEMBER_ENCRYPTION_KEY || process.env.UNREMEMBER_ENCRYPTION_KEY_FILE ? 'on' : 'off'}`)
+      console.log(`backups    ${store.listBackups().length}`)
+      try {
+        const all = listSessions({})
+        console.log(`sessions   ${all.length}`)
+      } catch (e) {
+        console.log(`sessions   error: ${e instanceof Error ? e.message : String(e)}`)
+      }
+      console.log(`dsh resume ${process.env.UNREMEMBER_DSH_RESUME_CMD ? 'configured' : 'hint only'}`)
+      return 0
+    }
     case 'pending': {
       const query = rest[0]
       if (!query) return fail('需要会话 id、前缀或 last。')
@@ -100,6 +120,10 @@ async function main(argv: string[]): Promise<number> {
       const { session, adapter } = findSession(query, { platform, cwd: values.cwd })
       const scope = values.scope === undefined ? 'turn' : values.scope
       if (scope !== 'turn' && scope !== 'span') return fail('--scope 只能是 turn 或 span。')
+      if (values.semantic && !values.yes) {
+        console.error('--semantic 会把候选摘录发送到配置的模型接口。检查环境变量后加 --yes 确认。')
+        return 1
+      }
       const options: PlanOptions = { semantic: values.semantic, scope }
       const { draft, hits } = await adapter.plan(session, target, options)
       const plan = buildPlan(store, draft, target)

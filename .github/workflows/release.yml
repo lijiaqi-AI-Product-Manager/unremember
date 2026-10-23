@@ -6,6 +6,8 @@ on:
 
 permissions:
   contents: write
+  id-token: write
+  attestations: write
 
 jobs:
   release:
@@ -24,12 +26,18 @@ jobs:
         run: |
           mkdir -p release
           npm pack --pack-destination release
+          npm sbom --sbom-format cyclonedx > release/sbom.json
           cd release
           sha256sum ./*.tgz > SHA256SUMS
+      - name: Attest
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: 'release/*'
       - name: Publish
         uses: softprops/action-gh-release@v2
         with:
           files: |
             release/*.tgz
             release/SHA256SUMS
+            release/sbom.json
           generate_release_notes: true

@@ -38,6 +38,21 @@ export async function resumeSession(session: SessionRef, opts: { yes?: boolean; 
     })
     return r.status ?? 1
   }
+  const template = process.env.UNREMEMBER_DSH_RESUME_CMD?.trim()
+  if (template) {
+    const command = template
+      .replaceAll('{sessionId}', session.sessionId)
+      .replaceAll('{cwd}', session.cwd ?? process.cwd())
+    console.log(`dsh 恢复：${command}`)
+    const r = spawnSync(command, {
+      cwd: session.cwd ?? process.cwd(),
+      env: { ...process.env, UNREMEMBER_SESSION_ID: session.sessionId },
+      stdio: 'inherit',
+      shell: true,
+    })
+    return r.status ?? 1
+  }
   console.log(`dsh 的恢复命令：dsh --profile ${process.env.DSH_PROFILE || 'web'} --session-id ${session.sessionId}`)
+  console.log('提示：设置 UNREMEMBER_DSH_RESUME_CMD 可让 resume 直接执行你的 dsh 启动器；支持 {sessionId} / {cwd} 占位符。')
   return 0
 }

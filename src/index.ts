@@ -11,3 +11,5 @@ export { findSession, listSessions } from './sessions.js'
 export { PROBES, judge, selectProbes, verifySession } from './verify.js'
 export { resumeSession } from './resume.js'
 export { applyToJsonl, applyToText } from './ops.js'
+
+export * from './semantic.js'

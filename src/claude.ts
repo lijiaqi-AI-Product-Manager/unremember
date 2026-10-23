@@ -7,6 +7,7 @@ import { Store } from './store.js'
 import { claudeConfigDir } from './paths.js'
 import { pidAlive } from './proc.js'
 import { excerpt, findSpans, getAt, stringLeaves } from './text.js'
+import { semanticConfig, semanticLocate, toHits } from './semantic.js'
 import type {
   Adapter,
   FormatFingerprint,
@@ -179,11 +180,11 @@ export class ClaudeAdapter implements Adapter {
   }
 
   async plan(session: SessionRef, target: Target, options: PlanOptions = {}): Promise<{ draft: PlanDraft; hits: Hit[] }> {
-    if (target.about && !target.text?.length && !target.messageIds?.length) {
-      throw new Error('--about 需要 --semantic；当前构建没有配置语义定位模型')
+    if (target.about && !target.text?.length && !target.messageIds?.length && !options.semantic) {
+      throw new Error('--about 需要同时传 --semantic')
     }
     const targetTexts = [...(target.text ?? [])].filter((s) => s.length > 0)
-    if (!targetTexts.length && !target.messageIds?.length) throw new Error('没有目标文本或 message id')
+    if (!targetTexts.length && !target.messageIds?.length && !(options.semantic && target.about)) throw new Error('没有目标文本、message id 或 --about --semantic')
 
     const stores = this.stores(session)
     const hits: Hit[] = []
@@ -244,6 +245,16 @@ export class ClaudeAdapter implements Adapter {
           hits.push({ store, locator: { start: span.start, end: span.end }, how: 'exact', confidence: 1, excerpt: excerpt(text, span) })
         }
       }
+    }
+
+    if (options.semantic) {
+      if (!semanticConfig()) throw new Error('--semantic 需要 UNREMEMBER_SEMANTIC_BASE_URL / UNREMEMBER_SEMANTIC_MODEL')
+      const description = target.about ?? targetTexts.join(' / ')
+      if (!description.trim()) throw new Error('--semantic 需要一个目标描述')
+      const semantic = await semanticLocate(session, stores, description, targetTexts)
+      const merged = mergeHits(hits, toHits(semantic))
+      hits.length = 0
+      hits.push(...merged)
     }
 
     const fingerprint = this.fingerprint(entries, hits)
@@ -578,6 +589,16 @@ export class ClaudeAdapter implements Adapter {
     const heading = text.split(/\r?\n/).find((line) => /^#{1,3}\s/.test(line)) ?? ''
     const dedicated = store.kind === 'cc-memory' && (findSpans(basename(store.path), targetTexts).length > 0 || findSpans(heading, targetTexts).length > 0 || (text.length > 0 && covered * 2 >= text.length))
     if (dedicated) return [{ op: 'delete-file', store, reason: '专门记录目标的 memory 文件' }]
+    if (!targetTexts.length) {
+      return hits.filter((h) => h.locator.start !== undefined && h.locator.end !== undefined).map((h) => ({
+        op: 'redact-span',
+        store,
+        start: h.locator.start!,
+        end: h.locator.end!,
+        replacement: '[已移除]',
+        reason: '语义命中',
+      }))
+    }
     return hits
       .filter((h) => h.locator.start !== undefined && h.locator.end !== undefined)
       .map((h) => ({
@@ -643,4 +664,16 @@ export class ClaudeAdapter implements Adapter {
 function isCompactBoundary(entry: unknown): boolean {
   const obj = asObject(entry)
   return obj?.type === 'system' && obj.subtype === 'compact_boundary'
+}
+
+function mergeHits(base: Hit[], extra: Hit[]): Hit[] {
+  const seen = new Set(base.map((h) => `${h.store.path}:${h.locator.line ?? ''}:${h.locator.pointer ?? ''}:${h.locator.start ?? ''}:${h.locator.end ?? ''}`))
+  const out = [...base]
+  for (const hit of extra) {
+    const key = `${hit.store.path}:${hit.locator.line ?? ''}:${hit.locator.pointer ?? ''}:${hit.locator.start ?? ''}:${hit.locator.end ?? ''}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(hit)
+  }
+  return out
 }

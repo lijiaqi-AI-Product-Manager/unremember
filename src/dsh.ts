@@ -8,6 +8,7 @@ import { applyPlanWithLive } from './apply-core.js'
 import { Store } from './store.js'
 import { dshHome } from './paths.js'
 import { excerpt, findSpans, stringLeaves } from './text.js'
+import { semanticConfig, semanticLocate, toHits } from './semantic.js'
 import type {
   Adapter,
   FormatFingerprint,
@@ -155,12 +156,12 @@ export class DshAdapter implements Adapter {
   }
 
   async plan(session: SessionRef, target: Target, options: PlanOptions = {}): Promise<{ draft: PlanDraft; hits: Hit[] }> {
-    if (target.about && !target.text?.length && !target.messageIds?.length) {
-      throw new Error('--about 需要 --semantic；当前构建没有配置语义定位模型')
+    if (target.about && !target.text?.length && !target.messageIds?.length && !options.semantic) {
+      throw new Error('--about 需要同时传 --semantic')
     }
     const targetTexts = [...(target.text ?? [])].filter((s) => s.length > 0)
     const seqs = new Set((target.messageIds ?? []).map((s) => Number(s)).filter((n) => Number.isInteger(n)))
-    if (!targetTexts.length && !seqs.size) throw new Error('没有目标文本或 seq')
+    if (!targetTexts.length && !seqs.size && !(options.semantic && target.about)) throw new Error('没有目标文本、seq 或 --about --semantic')
     const stores = this.stores(session)
     const hits: Hit[] = []
     for (const store of stores) {
@@ -195,6 +196,16 @@ export class DshAdapter implements Adapter {
           hits.push({ store, locator: { start: span.start, end: span.end }, how: 'exact', confidence: 1, excerpt: excerpt(text, span) })
         }
       }
+    }
+
+    if (options.semantic) {
+      if (!semanticConfig()) throw new Error('--semantic 需要 UNREMEMBER_SEMANTIC_BASE_URL / UNREMEMBER_SEMANTIC_MODEL')
+      const description = target.about ?? targetTexts.join(' / ')
+      if (!description.trim()) throw new Error('--semantic 需要一个目标描述')
+      const semantic = await semanticLocate(session, stores, description, targetTexts)
+      const merged = mergeHits(hits, toHits(semantic))
+      hits.length = 0
+      hits.push(...merged)
     }
 
     const first = this.readFile(session.file)
@@ -502,4 +513,16 @@ function redact(store: StoreRef, line: number, hit: Hit): Op {
     replacement: '（已删除）',
     reason: 'dsh 命中文本',
   }
+}
+
+function mergeHits(base: Hit[], extra: Hit[]): Hit[] {
+  const seen = new Set(base.map((h) => `${h.store.path}:${h.locator.line ?? ''}:${h.locator.pointer ?? ''}:${h.locator.start ?? ''}:${h.locator.end ?? ''}`))
+  const out = [...base]
+  for (const hit of extra) {
+    const key = `${hit.store.path}:${hit.locator.line ?? ''}:${hit.locator.pointer ?? ''}:${hit.locator.start ?? ''}:${hit.locator.end ?? ''}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(hit)
+  }
+  return out
 }
