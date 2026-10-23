@@ -10,7 +10,7 @@ import type { Platform, PlanOptions, Target } from './types.js'
 import { verifySession } from './verify.js'
 import { resumeSession } from './resume.js'
 
-const VERSION = '1.0.0'
+const VERSION = '1.0.2'
 
 const USAGE = `unremember — 让 agent 真的忘掉一件事
 

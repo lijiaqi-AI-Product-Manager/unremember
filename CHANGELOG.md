@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.0.2 — 2026-10-24
+
+Package/CLI version consistency for the npm staged release.
+
+- Bumped package and CLI version to 1.0.2.
+- README now states the npm staging/2FA approval requirement instead of recommending a placeholder install.
+- GitHub Release remains the supported download until the staged npm 1.0.2 is approved.
+
 ## v1.0.0 — 2026-10-24
 
 First stable release.

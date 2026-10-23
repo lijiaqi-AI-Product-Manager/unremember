@@ -1,6 +1,6 @@
 # unremember
 
-<p align="center"><img src="assets/logo.svg" width="112" alt="unremember logo"></p>
+<p align="center"><img src="https://raw.githubusercontent.com/lijiaqimun-coder/unremember/main/assets/logo.svg" width="112" alt="unremember logo"></p>
 
 <p align="center"><strong>Give a local coding agent a bowl of amnesia.</strong></p>
 
@@ -8,7 +8,7 @@
 
 [![CI](https://github.com/lijiaqimun-coder/unremember/actions/workflows/ci.yml/badge.svg)](https://github.com/lijiaqimun-coder/unremember/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/lijiaqimun-coder/unremember?display_name=tag)](https://github.com/lijiaqimun-coder/unremember/releases)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/lijiaqimun-coder/unremember/blob/main/LICENSE)
 [![Node](https://img.shields.io/badge/node-%3E%3D22.19-339933)](package.json)
 
 `unremember` is a local-first privacy tool for **Claude Code** and **dsh** (DeepSeek Harness). It does not just delete a chat row. It removes the target from the transcript, its echoes, and the off-session copies, then verifies the result on a fork.
@@ -35,12 +35,27 @@ Deleting a message from the UI is not forgetting:
 
 ## Install / Download
 
+### npm (staged, pending 2FA approval)
+
+The package name `unremember` has a staged 1.0.2 release. Until a maintainer approves it with 2FA on npmjs.com, `npm install -g unremember` may install a 0.0.0-stage placeholder. Use the GitHub Release below for now. After approval:
+
+```bash
+npm install -g unremember
+unremember --version
+```
+
+One-shot:
+
+```bash
+npx unremember --version
+```
+
 ### GitHub Release
 
 Download the latest package tarball from [Releases](https://github.com/lijiaqimun-coder/unremember/releases). The release asset is a ready-to-install package (built `dist/` included):
 
 ```bash
-npm install -g ./unremember-1.0.0.tgz
+npm install -g ./unremember-1.0.2.tgz
 unremember --version
 ```
 
@@ -61,15 +76,11 @@ npm run build
 npm link
 ```
 
-### One-shot
+### One-shot from GitHub
 
 ```bash
 npx github:lijiaqimun-coder/unremember --help
 ```
-
-### npm registry
-
-The package is **not yet published to npmjs.com**. GitHub Releases / GitHub install are the supported download paths for v1.0.0.
 
 ### 国内加速
 
@@ -89,7 +100,7 @@ npm link
 Release 包也可以用同样前缀下载：
 
 ```text
-https://ghproxy.net/https://github.com/lijiaqimun-coder/unremember/releases/download/v1.0.0/unremember-1.0.0.tgz
+https://ghproxy.net/https://github.com/lijiaqimun-coder/unremember/releases/download/v1.0.2/unremember-1.0.2.tgz
 ```
 
 ## Quick start
@@ -284,7 +295,6 @@ src/
 - **Not a code/secret scanner.** If the canary was written into project files or committed to git, `unremember` does not rewrite your repository.
 - Semantic matching requires a configured endpoint; no model is bundled, so `--semantic` without configuration fails rather than guessing.
 - **No Codex adapter.** Codex 0.164 only accepts the Responses API; no compatible test provider was available. See `docs/调研/调研结果-03-补充实验.md`.
-- **No npm registry release yet.** Use GitHub Releases or `npm install -g github:...`.
 - **dsh resume needs a launcher.** Set `UNREMEMBER_DSH_RESUME_CMD` (supports `{sessionId}` and `{cwd}`) to let `resume` execute your dsh CLI/web launcher; otherwise it prints the command and never guesses a profile.
 
 ## FAQ
@@ -296,7 +306,7 @@ No by default. The tool is offline unless you explicitly set a semantic endpoint
 No. It deletes the affected turn or, with `--scope span`, the matched span. Other turns stay.
 
 **Why is the plan file safe?**  
-The plan stores target SHA-256, not the literal target. Backups contain originals by design; run `purge-backups` when done.
+The plan stores target SHA-256, not the literal target. Backups contain originals unless you set `UNREMEMBER_ENCRYPTION_KEY`; run `purge-backups` when done.
 
 **What if the format changes?**  
 Unknown entry types are still scanned, but a hit inside one is a blocker. `apply` refuses rather than guessing.
@@ -313,8 +323,8 @@ npm run typecheck
 npm run build
 ```
 
-Tests use synthetic sessions and temporary directories. Real sessions, credentials and usernames must never be committed. See [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md).
+Tests use synthetic sessions and temporary directories. Real sessions, credentials and usernames must never be committed. See [CONTRIBUTING.md](https://github.com/lijiaqimun-coder/unremember/blob/main/CONTRIBUTING.md) and [SECURITY.md](https://github.com/lijiaqimun-coder/unremember/blob/main/SECURITY.md).
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+MIT. See [LICENSE](https://github.com/lijiaqimun-coder/unremember/blob/main/LICENSE).
