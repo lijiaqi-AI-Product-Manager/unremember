@@ -1,12 +1,20 @@
-// unremember's own state under ~/.unremember: plans, backups and an append-only journal.
-// None of it holds the forgotten text except the backups, which exist so apply can be
-// undone and are deleted with `purge-backups`.
+// unremember's own state under ~/.unremember: plans, backups, pending requests and a journal.
+// None of it holds the forgotten text except backups (undo) and a 0600 pending request (skill input).
 import { randomBytes } from 'node:crypto'
-import { appendFileSync, copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync } from 'node:fs'
+import {
+  appendFileSync,
+  chmodSync,
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+} from 'node:fs'
 import { join } from 'node:path'
 import { sha256File, writeAtomic } from './fsx.js'
 import { dataHome } from './paths.js'
-import type { Plan } from './types.js'
+import type { Plan, Platform, Target } from './types.js'
 
 export interface BackupManifest {
   v: 1
@@ -21,6 +29,15 @@ export interface JournalEntry {
   planId: string
   files: number
   ops?: number
+}
+
+export interface PendingRequest {
+  v: 1
+  platform: Platform
+  sessionId: string
+  createdAt: number
+  /** Literal target variants; stored 0600 under pending/, never in a plan. */
+  target: Target
 }
 
 export class Store {
@@ -42,6 +59,10 @@ export class Store {
 
   private backupDir(id: string) {
     return join(this.dir, 'backups', id)
+  }
+
+  private pendingFile(sessionId: string) {
+    return join(this.dir, 'pending', `${sessionId}.json`)
   }
 
   savePlan(plan: Plan) {
@@ -115,5 +136,42 @@ export class Store {
   journal(entry: JournalEntry) {
     mkdirSync(this.dir, { recursive: true })
     appendFileSync(join(this.dir, 'journal.jsonl'), JSON.stringify(entry) + '\n')
+  }
+
+  /** A skill writes this while the session is still live; resume consumes it. */
+  savePending(request: PendingRequest) {
+    const file = this.pendingFile(request.sessionId)
+    mkdirSync(join(this.dir, 'pending'), { recursive: true })
+    writeAtomic(file, JSON.stringify(request, null, 1))
+    try {
+      chmodSync(file, 0o600)
+    } catch {}
+  }
+
+  loadPending(sessionId: string): PendingRequest | undefined {
+    try {
+      return JSON.parse(readFileSync(this.pendingFile(sessionId), 'utf8')) as PendingRequest
+    } catch {
+      return undefined
+    }
+  }
+
+  removePending(sessionId: string) {
+    rmSync(this.pendingFile(sessionId), { force: true })
+  }
+
+  listPending(): PendingRequest[] {
+    const dir = join(this.dir, 'pending')
+    if (!existsSync(dir)) return []
+    return readdirSync(dir)
+      .filter((f) => f.endsWith('.json'))
+      .map((f) => {
+        try {
+          return JSON.parse(readFileSync(join(dir, f), 'utf8')) as PendingRequest
+        } catch {
+          return undefined
+        }
+      })
+      .filter((p): p is PendingRequest => p !== undefined)
   }
 }

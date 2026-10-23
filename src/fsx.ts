@@ -31,12 +31,14 @@ export function writeAtomic(file: string, data: string | Buffer) {
 export class JsonlFile {
   readonly raw: string[]
   readonly eol: '\n' | '\r\n'
+  private readonly finalEol: boolean
   private readonly parsed = new Map<number, unknown>()
   private readonly removed = new Set<number>()
   private readonly dirty = new Set<number>()
 
   constructor(text: string) {
     this.eol = text.includes('\r\n') ? '\r\n' : '\n'
+    this.finalEol = text.endsWith('\n')
     const lines = text.split(/\r?\n/)
     if (lines.length && lines[lines.length - 1] === '') lines.pop()
     this.raw = lines
@@ -83,7 +85,7 @@ export class JsonlFile {
       if (this.removed.has(i)) continue
       out.push(this.dirty.has(i) ? JSON.stringify(this.parsed.get(i)) : this.raw[i]!)
     }
-    return out.length ? out.join(this.eol) + this.eol : ''
+    return out.length ? out.join(this.eol) + (this.finalEol ? this.eol : '') : ''
   }
 }
 

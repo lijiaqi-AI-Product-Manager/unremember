@@ -8,6 +8,7 @@ export type StoreKind =
   | 'cc-memory-index'
   | 'cc-file-history'
   | 'cc-paste-cache'
+  | 'cc-tool-result'
   | 'dsh-session'
   | 'dsh-session-old-gen'
   | 'dsh-storage'
@@ -24,6 +25,8 @@ export interface SessionRef {
   /** The live session file (transcript / current generation). */
   file: string
   projectDir?: string
+  /** The session working directory, when the format carries one. */
+  cwd?: string
 }
 
 export interface SessionInfo extends SessionRef {
@@ -75,7 +78,10 @@ export type Op =
   | (OpBase & { op: 'delete-file' })
   | (OpBase & { op: 'redact-span'; line?: number; pointer?: string; start: number; end: number; replacement: string })
   | (OpBase & { op: 'blank-field'; line: number; pointer: string; value: '' | [] | Record<string, never> })
-  | (OpBase & { op: 'relink'; line: number; field: string; from: string | null; to: string | null })
+  | (OpBase & { op: 'set-field'; line: number; pointer: string; value: unknown })
+  /** Remove one element of an array, e.g. a thinking block from message.content. */
+  | (OpBase & { op: 'remove-element'; line: number; pointer: string })
+  | (OpBase & { op: 'relink'; line: number; pointer: string; from: string | null; to: string | null })
 
 export interface FormatFingerprint {
   platform: Platform
@@ -97,12 +103,18 @@ export interface Plan {
   /** Every file the ops touch, as it was when planned; apply refuses if any changed. */
   files: Array<{ path: string; sha256Before: string | null }>
   warnings: string[]
+  /** Reasons apply must refuse, e.g. a hit inside an entry type we don't understand. */
+  blockers: string[]
+  /** Exact hits left after simulating the ops on the session's own files; must be 0. */
+  residualHits: number
 }
 
 export type PlanDraft = Omit<Plan, 'v' | 'id' | 'createdAt' | 'targetSha256'>
 
 export interface PlanOptions {
   semantic?: boolean
+  /** 'turn' deletes every turn whose prompt mentions the target; 'span' only cuts the matched text. */
+  scope?: 'turn' | 'span'
 }
 
 export interface Adapter {
