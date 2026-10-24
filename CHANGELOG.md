@@ -1,5 +1,16 @@
 # Changelog
 
+## v1.0.4 — 2026-10-24
+
+Post-release hardening from the same audit cycle.
+
+- Claude live detection now fails closed (`unknown`) when the sessions registry is missing; `UNREMEMBER_CLAUDE_LIVE_PROBE=off` is available only as an explicit test escape hatch.
+- Apply takes an owner-only plan lock, so two processes cannot execute the same plan concurrently.
+- Plans can be listed/removed with `plans` / `purge-plans`.
+- Large Claude transcripts over `UNREMEMBER_MAX_SESSION_BYTES` (default 48 MiB) fail with a clear error instead of risking multi-GB memory use; the limit is configurable.
+- Added more regression tests; total 39 passing, 1 platform-specific skip.
+- npm 1.0.3 remains staged; 1.0.4 supersedes it.
+
 ## v1.0.3 — 2026-10-24
 
 Security and correctness release driven by independent audits.

@@ -34,11 +34,11 @@ export function applyPlanWithLive(
     if (!allowed.has(resolve(path))) throw new Error(`计划路径不在当前会话的 store 集合内，拒绝执行：${path}`)
     if (!plan.files.some((f) => resolve(f.path) === resolve(path))) throw new Error(`计划没有记录文件哈希：${path}`)
   }
-  store.backup(plan.id, paths)
-  const byPath = new Map<string, Op[]>()
-  for (const op of plan.ops) byPath.set(op.store.path, [...(byPath.get(op.store.path) ?? []), op])
-
+  const unlock = store.lockPlan(plan.id)
   try {
+    store.backup(plan.id, paths)
+    const byPath = new Map<string, Op[]>()
+    for (const op of plan.ops) byPath.set(op.store.path, [...(byPath.get(op.store.path) ?? []), op])
     for (const [path, ops] of byPath) {
       if (ops.some((op) => op.op === 'delete-file')) {
         rmSync(path, { force: true })
@@ -69,7 +69,9 @@ export function applyPlanWithLive(
       throw new Error(`${error instanceof Error ? error.message : String(error)}；自动恢复失败：${restoreError instanceof Error ? restoreError.message : String(restoreError)}；备份仍在 ~/.unremember/backups/${plan.id}`)
     }
     throw error
-  }
+    } finally {
+      unlock()
+    }
   store.journal({ t: Date.now(), action: 'apply', planId: plan.id, files: paths.length, ops: plan.ops.length })
 }
 

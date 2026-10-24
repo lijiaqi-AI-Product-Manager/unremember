@@ -43,7 +43,7 @@ npm install -g unremember
 unremember --version
 ```
 
-The registry currently serves **1.0.2** as `latest`; it predates the security fixes in 1.0.3. **1.0.3 is staged for maintainer 2FA approval — use the GitHub Release below until it is approved.**
+The registry currently serves **1.0.2** as `latest`; it predates the security fixes in 1.0.4. **1.0.4 is staged for maintainer 2FA approval — use the GitHub Release below until it is approved.**
 
 One-shot:
 
@@ -56,7 +56,7 @@ npx unremember --version
 Download the latest package tarball from [Releases](https://github.com/lijiaqimun-coder/unremember/releases). The release asset is a ready-to-install package (built `dist/` included):
 
 ```bash
-npm install -g ./unremember-1.0.3.tgz
+npm install -g ./unremember-1.0.4.tgz
 unremember --version
 ```
 
@@ -101,7 +101,7 @@ npm link
 Release 包也可以用同样前缀下载：
 
 ```text
-https://ghproxy.net/https://github.com/lijiaqimun-coder/unremember/releases/download/v1.0.3/unremember-1.0.3.tgz
+https://ghproxy.net/https://github.com/lijiaqimun-coder/unremember/releases/download/v1.0.4/unremember-1.0.4.tgz
 ```
 
 ## Quick start

@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { ClaudeAdapter } from '../src/claude.js'
 import { applyPlan } from '../src/apply.js'
 import { buildPlan } from '../src/plan.js'
@@ -12,8 +12,13 @@ import type { Plan } from '../src/types.js'
 const CANARY = '青柠绿-7429'
 const cleanups: Array<() => void> = []
 afterEach(() => {
+  delete process.env.UNREMEMBER_CLAUDE_LIVE_PROBE
   while (cleanups.length) cleanups.pop()!()
   delete process.env.UNREMEMBER_DSH_LOCK_PROBE
+})
+
+beforeEach(() => {
+  process.env.UNREMEMBER_CLAUDE_LIVE_PROBE = 'off'
 })
 
 function root(): string {

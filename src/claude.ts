@@ -1,4 +1,4 @@
-import { readFileSync, statSync } from 'node:fs'
+import { existsSync, readFileSync, statSync } from 'node:fs'
 import { basename, dirname, join, resolve } from 'node:path'
 import { JsonlFile, sha256File } from './fsx.js'
 import { applyToJsonl, applyToText } from './ops.js'
@@ -128,6 +128,8 @@ export class ClaudeAdapter implements Adapter {
   }
 
   liveState(session: SessionRef): LiveState {
+    if (process.env.UNREMEMBER_CLAUDE_LIVE_PROBE === 'off') return 'idle'
+    if (!existsSync(this.sessionsDir())) return 'unknown'
     let names: string[]
     try {
       names = listFiles(this.sessionsDir(), (f) => f.endsWith('.json')).map((f) => basename(f))
@@ -141,7 +143,8 @@ export class ClaudeAdapter implements Adapter {
         const meta = asObject(JSON.parse(raw))
         if (!meta || asString(meta.sessionId) !== session.sessionId) continue
         const pid = typeof meta.pid === 'number' ? meta.pid : Number(meta.pid)
-        if (Number.isInteger(pid) && pidAlive(pid)) return 'live'
+        if (!Number.isInteger(pid)) return 'unknown'
+        if (pidAlive(pid)) return 'live'
       }
       return 'idle' // no live marker found; a closed session may legitimately have none
     } catch {
@@ -183,6 +186,10 @@ export class ClaudeAdapter implements Adapter {
     }
     const targetTexts = [...(target.text ?? [])].filter((s) => s.length > 0)
     if (!targetTexts.length && !target.messageIds?.length && !(options.semantic && target.about)) throw new Error('没有目标文本、message id 或 --about --semantic')
+    const maxBytes = Number(process.env.UNREMEMBER_MAX_SESSION_BYTES ?? 48 * 1024 * 1024)
+    if (Number.isFinite(maxBytes) && maxBytes > 0 && statSync(session.file).size > maxBytes) {
+      throw new Error(`会话文件 ${statSync(session.file).size} bytes 超过安全上限 ${maxBytes}；可设置 UNREMEMBER_MAX_SESSION_BYTES 提高上限，但大会话可能消耗数 GB 内存`)
+    }
 
     const stores = this.stores(session)
     const hits: Hit[] = []

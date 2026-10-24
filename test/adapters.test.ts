@@ -18,9 +18,11 @@ const temp = () => {
 }
 beforeEach(() => {
   process.env.UNREMEMBER_DSH_LOCK_PROBE = 'off'
+  process.env.UNREMEMBER_CLAUDE_LIVE_PROBE = 'off'
 })
 afterEach(() => {
   delete process.env.UNREMEMBER_DSH_LOCK_PROBE
+  delete process.env.UNREMEMBER_CLAUDE_LIVE_PROBE
   for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true })
 })
 

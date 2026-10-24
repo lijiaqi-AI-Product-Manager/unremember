@@ -4,10 +4,12 @@ import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from 'node:
 import {
   appendFileSync,
   chmodSync,
+  closeSync,
   copyFileSync,
   existsSync,
   mkdirSync,
   readFileSync,
+  openSync,
   readdirSync,
   rmSync,
   writeFileSync,
@@ -47,6 +49,23 @@ export class Store {
   readonly dir: string
   constructor(dir = dataHome()) {
     this.dir = dir
+  }
+
+  lockPlan(id: string): () => void {
+    if (!safeSegment(id)) throw new Error(`invalid plan id: ${id}`)
+    const dir = join(this.dir, 'locks')
+    mkdirSync(dir, { recursive: true, mode: 0o700 })
+    const file = join(dir, `${id}.lock`)
+    let fd: number
+    try {
+      fd = openSync(file, 'wx', 0o600)
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException)?.code === 'EEXIST') throw new Error(`计划正在执行：${id}`)
+      throw error
+    }
+    writeFileSync(file, String(process.pid), { flag: 'a' })
+    closeSync(fd)
+    return () => rmSync(file, { force: true })
   }
 
   newPlanId(now = Date.now()): string {
