@@ -163,7 +163,11 @@ export class DshAdapter implements Adapter {
     const seqs = new Set((target.messageIds ?? []).map((s) => Number(s)).filter((n) => Number.isInteger(n)))
     if (!targetTexts.length && !seqs.size && !(options.semantic && target.about)) throw new Error('没有目标文本、seq 或 --about --semantic')
     const stores = this.stores(session)
+    const generationFiles = this.filesInDir(this.sessionDir(session))
+    const hasPlain = generationFiles.some((f) => f.endsWith('.jsonl'))
+    const hasZstd = generationFiles.some((f) => f.endsWith('.zstd'))
     const hits: Hit[] = []
+    const parseBlockers: string[] = []
     for (const store of stores) {
       const isJsonl = store.path.endsWith('.jsonl') || store.path.endsWith('.jsonl.zstd')
       if (isJsonl) {
@@ -189,6 +193,7 @@ export class DshAdapter implements Adapter {
             }
           }
         }
+        if (file.torn.size) parseBlockers.push(`${file.torn.size} 行 JSONL 无法解析（可能被截断）；拒绝执行`)
       } else {
         const text = safeReadText(store.path)
         if (text === undefined) continue
@@ -211,7 +216,8 @@ export class DshAdapter implements Adapter {
     const first = this.readFile(session.file)
     if (seqs.size && !hits.some((h) => h.reason === 'explicit seq')) throw new Error('在会话里找不到指定的 seq')
     const fingerprint = this.fingerprint(first, hits)
-    const blockers: string[] = []
+    const blockers: string[] = [...parseBlockers]
+    if (hasPlain && hasZstd) blockers.push('同一 dsh session 同时存在 .jsonl 与 .jsonl.zstd（混合编码），拒绝执行')
     if (first.header.version !== 4) blockers.push(`dsh session header version=${String(first.header.version)}，只支持 v4`)
     if (fingerprint.unknownTypes.some((type) => hits.some((h) => asString(asObject(first.lines.get(h.locator.line ?? -1))?.type) === type))) {
       blockers.push('命中落在未知 dsh 事件类型上，拒绝执行')
@@ -223,7 +229,7 @@ export class DshAdapter implements Adapter {
       const storeHits = byPath.get(store.path)
       if (!storeHits?.length) continue
       if (store.kind === 'dsh-session' || store.kind === 'dsh-session-old-gen') {
-        ops.push(...this.sessionOps(store, storeHits, seqs))
+        ops.push(...this.sessionOps(store, storeHits, seqs, options.scope ?? 'turn'))
       } else {
         ops.push(...this.textOps(store, storeHits))
       }
@@ -242,7 +248,7 @@ export class DshAdapter implements Adapter {
   }
 
   apply(plan: Plan): void {
-    applyPlanWithLive(plan, new Store(), (session) => this.liveState(session))
+    applyPlanWithLive(plan, new Store(), (session) => this.liveState(session), this.stores(plan.session).map((s) => s.path))
   }
 
   /** Copy one session into a new id under the same root. The parent stays byte-identical. */
@@ -341,7 +347,7 @@ export class DshAdapter implements Adapter {
     return { platform: 'dsh', versions: [String(file.header.version)], entryTypes, unknownTypes }
   }
 
-  private sessionOps(store: StoreRef, hits: Hit[], seqs: Set<number>): Op[] {
+  private sessionOps(store: StoreRef, hits: Hit[], seqs: Set<number>, scope: 'turn' | 'span'): Op[] {
     const raw = readDshLog(store.path)
     const file = new JsonlFile(raw)
     const out: Op[] = []
@@ -358,7 +364,8 @@ export class DshAdapter implements Adapter {
         const pointer = hit.locator.pointer ?? ''
         if (!pointer) continue
         if (type === 'agent/inbox/spliced' || type === 'user/message') {
-          if (/\/text$/.test(pointer)) out.push(blank(store, line, pointer, 'dsh 消息正文'))
+          if (scope === 'span') out.push(redact(store, line, hit))
+          else if (/\/text$/.test(pointer)) out.push(blank(store, line, pointer, 'dsh 消息正文'))
           else out.push(redact(store, line, hit))
         } else if (type === 'assistant/message') {
           if (pointer.startsWith('/data/stream') || pointer.startsWith('/data/message/source/replayState')) {
@@ -366,7 +373,8 @@ export class DshAdapter implements Adapter {
             // field after that would point at a value that no longer exists.
             continue
           }
-          if (/\/(text|thinking)$/.test(pointer)) out.push(blank(store, line, pointer, 'dsh assistant 正文'))
+          if (scope === 'span') out.push(redact(store, line, hit))
+          else if (/\/(text|thinking)$/.test(pointer)) out.push(blank(store, line, pointer, 'dsh assistant 正文'))
           else out.push(redact(store, line, hit))
         } else if (type === 'compaction/summary') {
           out.push(redact(store, line, hit))

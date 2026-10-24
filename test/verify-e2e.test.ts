@@ -1,4 +1,4 @@
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -15,10 +15,29 @@ afterEach(() => {
 })
 
 describe('verify fork runner', () => {
-  it('runs the agent command and reports no leak for unknown answers', async () => {
+  it('treats an all-unknown agent as inconclusive, not clean', async () => {
     process.env.CLAUDE_BIN = fakeAgent('unknown')
     const code = await verifySession(makeSession(), ['secret-canary'], { probes: 1, timeoutMs: 10_000 })
-    expect(code).toBe(0)
+    expect(code).toBe(1)
+  }, 20_000)
+
+
+  it('treats an empty agent response as an error, not a clean pass', async () => {
+    process.env.CLAUDE_BIN = fakeAgent('')
+    const code = await verifySession(makeSession(), ['secret-canary'], { probes: 1, timeoutMs: 10_000 })
+    expect(code).toBe(1)
+  }, 20_000)
+
+  it('does not let a hostile session_id delete outside the project directory', async () => {
+    const session = makeSession()
+    const victim = join(session.projectDir!, '..', 'victim-dir')
+    mkdirSync(victim, { recursive: true })
+    writeFileSync(join(victim, 'keep.txt'), 'keep')
+    cleanups.push(() => rmSync(victim, { recursive: true, force: true }))
+    process.env.CLAUDE_BIN = fakeAgent('unknown', '../../victim-dir')
+    const code = await verifySession(session, ['secret-canary'], { probes: 1, timeoutMs: 10_000 })
+    expect(code).toBe(1)
+    expect(readFileSync(join(victim, 'keep.txt'), 'utf8')).toBe('keep')
   }, 20_000)
 
   it('exits 1 when the fork leaks the canary', async () => {
@@ -38,10 +57,10 @@ function makeSession(): SessionRef {
   return { platform: 'claude-code', sessionId: 'sid', file, projectDir: project, cwd: project }
 }
 
-function fakeAgent(answer: string): string {
+function fakeAgent(answer: string, sessionId = 'fake-child'): string {
   const dir = mkdtempSync(join(tmpdir(), 'unremember-agent-'))
   cleanups.push(() => rmSync(dir, { recursive: true, force: true }))
-  const payload = JSON.stringify({ session_id: 'fake-child', result: answer })
+  const payload = JSON.stringify({ session_id: sessionId, result: answer })
   const js = join(dir, 'agent.js')
   writeFileSync(js, `process.stdout.write(${JSON.stringify(payload)})\n`)
   if (process.platform === 'win32') {

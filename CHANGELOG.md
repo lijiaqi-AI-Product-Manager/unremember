@@ -1,5 +1,22 @@
 # Changelog
 
+## v1.0.3 — 2026-10-24
+
+Security and correctness release driven by independent audits.
+
+- Plan files no longer persist `session.preview`; a plan now contains only hashes, paths and ops.
+- Apply validates every path against the current adapter store set, rejects symlinks, and fails loudly if automatic restore fails.
+- Verify rejects a hostile agent `session_id` before cleanup, treats empty/agent-silent answers as errors, treats all-`unknown` runs as inconclusive, and detects pointer-only leaks.
+- BOM-prefixed JSONL is parsed; any unparseable non-empty JSONL line is a blocker instead of a silent miss.
+- MEMORY.md cleanup matches the exact markdown link target.
+- Backups/plans/pending use owner-only permissions; existing file modes are preserved on atomic writes.
+- dsh honors `--scope span`, reports mixed `.jsonl`/`.jsonl.zstd` encodings as blockers, and quotes resume placeholders.
+- Encrypted pending without a key now reports the missing key instead of "no pending request".
+- Node <22.19 is rejected by a small bootstrap before the zstd import can crash the CLI.
+- Added `plans` / `purge-plans`; `sessions` masks previews unless `--show-preview`.
+- Added regression tests for plan plaintext, malicious plan paths, verify cleanup/empty answers, BOM/torn JSONL, memory index, permissions, pending keys, dsh scope, and resume quoting.
+- Coverage thresholds and a semantic-upload disclosure update.
+
 ## v1.0.2 — 2026-10-24
 
 Package/CLI version consistency for the npm staged release.

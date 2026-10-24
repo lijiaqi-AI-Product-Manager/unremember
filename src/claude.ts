@@ -134,18 +134,16 @@ export class ClaudeAdapter implements Adapter {
     } catch {
       return 'unknown'
     }
-    let matched = false
     try {
       for (const name of names) {
         const raw = safeReadText(join(this.sessionsDir(), name))
         if (!raw) continue
         const meta = asObject(JSON.parse(raw))
         if (!meta || asString(meta.sessionId) !== session.sessionId) continue
-        matched = true
         const pid = typeof meta.pid === 'number' ? meta.pid : Number(meta.pid)
         if (Number.isInteger(pid) && pidAlive(pid)) return 'live'
       }
-      return matched ? 'idle' : 'idle'
+      return 'idle' // no live marker found; a closed session may legitimately have none
     } catch {
       return 'unknown'
     }
@@ -188,6 +186,7 @@ export class ClaudeAdapter implements Adapter {
 
     const stores = this.stores(session)
     const hits: Hit[] = []
+    const parseBlockers: string[] = []
     const explicitLines = new Set<number>()
     const transcript = JsonlFile.read(session.file)
     const entries = Array.from({ length: transcript.length }, (_, i) => transcript.get(i))
@@ -223,6 +222,7 @@ export class ClaudeAdapter implements Adapter {
             const project = asString(o?.project) ?? asString(o?.cwd)
             if (sid !== undefined && sid !== session.sessionId) continue
             if (sid === undefined && project !== undefined && session.cwd && resolve(project) !== resolve(session.cwd)) continue
+            if (sid === undefined && project === undefined) continue
           }
           if (targetTexts.length) {
             for (const leaf of stringLeaves(entry)) {
@@ -238,6 +238,7 @@ export class ClaudeAdapter implements Adapter {
             }
           }
         }
+        if (file.torn.size) parseBlockers.push(`${file.torn.size} 行 JSONL 无法解析（可能被截断）；拒绝执行`)
       } else {
         const text = safeReadText(store.path)
         if (text === undefined) continue
@@ -258,7 +259,7 @@ export class ClaudeAdapter implements Adapter {
     }
 
     const fingerprint = this.fingerprint(entries, hits)
-    const blockers: string[] = []
+    const blockers: string[] = [...parseBlockers]
     if (!Object.keys(fingerprint.entryTypes).some((t) => t === 'user' || t === 'assistant')) blockers.push('没有识别到 user/assistant 结构，拒绝执行')
     if (fingerprint.unknownTypes.some((type) => hits.some((h) => asString(asObject(entries[h.locator.line ?? -1])?.type) === type))) {
       blockers.push('命中落在未知条目类型上；格式可能变了，拒绝执行')
@@ -297,7 +298,9 @@ export class ClaudeAdapter implements Adapter {
       const base = basename(op.store.path)
       const indexLines = jsonLines(indexText)
       for (let line = 0; line < indexLines.length; line++) {
-        if (!indexLines[line]!.includes(base)) continue
+        const link = /\]\(([^)]+)\)/.exec(indexLines[line]!)
+        const target = link?.[1]?.split('#')[0]?.replace(/^.*[\\/]/, '')
+        if (target !== base) continue
         if (!ops.some((o) => o.op === 'delete-line' && o.store.path === indexPath && o.line === line)) {
           ops.push({ op: 'delete-line', store: { kind: 'cc-memory-index', path: indexPath }, line, reason: '从 memory 索引移除已删文件' })
         }
@@ -329,7 +332,7 @@ export class ClaudeAdapter implements Adapter {
   }
 
   apply(plan: Plan): void {
-    applyPlanWithLive(plan, new Store(), (session) => this.liveState(session))
+    applyPlanWithLive(plan, new Store(), (session) => this.liveState(session), this.stores(plan.session).map((s) => s.path))
   }
 
   private sessionInfo(file: string): SessionInfo | undefined {
@@ -371,6 +374,7 @@ export class ClaudeAdapter implements Adapter {
     const entries = Array.from({ length: file.length }, (_, i) => file.get(i))
     const ops: Op[] = []
     const blockers: string[] = []
+    if (file.torn.size) blockers.push(`${file.torn.size} 行 JSONL 无法解析（可能被截断）；拒绝执行`)
     const deleted = new Set<number>()
     const add = (op: Op) => {
       if (op.op !== 'delete-file' && op.op !== 'delete-entry' && op.op !== 'delete-line' && 'line' in op && op.line !== undefined && deleted.has(op.line)) return
@@ -486,6 +490,23 @@ export class ClaudeAdapter implements Adapter {
       }
     }
 
+    // Structural self-check: every surviving tool_use must have a tool_result
+    // and vice versa. The closure above handles deleted pairs; this catches
+    // pre-existing orphans that would otherwise be silently left behind.
+    const useIds = new Set<string>()
+    const resultIds = new Set<string>()
+    for (let i = 0; i < entries.length; i++) {
+      if (deleted.has(i)) continue
+      for (const block of blocksOf(entries[i])) {
+        const id = asString(block.id) ?? asString(block.tool_use_id)
+        if (!id) continue
+        if (block.type === 'tool_use') useIds.add(id)
+        if (block.type === 'tool_result') resultIds.add(id)
+      }
+    }
+    for (const id of useIds) if (!resultIds.has(id)) blockers.push(`工具调用 ${id} 没有对应的 tool_result，拒绝执行`)
+    for (const id of resultIds) if (!useIds.has(id)) blockers.push(`tool_result ${id} 没有对应的 tool_use，拒绝执行`)
+
     // Parent / logical parent relink.
     const parentOf = new Map<string, string | null>()
     const lineOfUuid = new Map<string, number>()
@@ -585,9 +606,8 @@ export class ClaudeAdapter implements Adapter {
   private memoryOps(store: StoreRef, hits: Hit[], targetTexts: string[]): Op[] {
     const text = safeReadText(store.path) ?? ''
     const spans = findSpans(text, targetTexts)
-    const covered = spans.reduce((n, s) => n + (s.end - s.start), 0)
     const heading = text.split(/\r?\n/).find((line) => /^#{1,3}\s/.test(line)) ?? ''
-    const dedicated = store.kind === 'cc-memory' && (findSpans(basename(store.path), targetTexts).length > 0 || findSpans(heading, targetTexts).length > 0 || (text.length > 0 && covered * 2 >= text.length))
+    const dedicated = store.kind === 'cc-memory' && (findSpans(basename(store.path), targetTexts).length > 0 || findSpans(heading, targetTexts).length > 0)
     if (dedicated) return [{ op: 'delete-file', store, reason: '专门记录目标的 memory 文件' }]
     if (!targetTexts.length) {
       return hits.filter((h) => h.locator.start !== undefined && h.locator.end !== undefined).map((h) => ({
@@ -651,7 +671,11 @@ export class ClaudeAdapter implements Adapter {
       const scan = store.kind === 'cc-history' ? text.split(/\r?\n/).filter((line) => {
         try {
           const o = asObject(JSON.parse(line))
-          return asString(o?.sessionId) === session.sessionId || (o?.sessionId === undefined && (!o?.project || !session.cwd || resolve(asString(o.project) ?? '') === resolve(session.cwd)))
+          const sid = asString(o?.sessionId)
+          const project = asString(o?.project)
+          if (sid !== undefined) return sid === session.sessionId
+          if (project === undefined) return false
+          return !session.cwd || resolve(project) === resolve(session.cwd)
         } catch { return false }
       }).join('\n') : text
       for (const needle of targetTexts) count += findSpans(scan, [needle]).length

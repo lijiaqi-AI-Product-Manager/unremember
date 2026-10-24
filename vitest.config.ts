@@ -8,6 +8,7 @@ export default defineConfig({
       exclude: ['src/cli.ts'],
       reporter: ['text', 'json-summary', 'html'],
       reportsDirectory: 'coverage',
+      thresholds: { lines: 60, branches: 45, functions: 60, statements: 55 },
     },
   },
 })

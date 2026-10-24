@@ -23,7 +23,7 @@ It does **not** protect against:
 - a malicious local process with read access to your home directory
 - semantic paraphrases that do not contain the literal target
 
-The backup directory and the pending skill request contain the original text by design. Set `UNREMEMBER_ENCRYPTION_KEY` (or `UNREMEMBER_ENCRYPTION_KEY_FILE`) to encrypt new backups and pending files with AES-256-GCM; losing the key makes rollback impossible. Use `unremember purge-backups` after verifying, and protect `~/.unremember` like any other sensitive local data.
+Semantic mode sends target/canary text and candidate excerpts to the endpoint you configure; it is opt-in. The backup directory and the pending skill request contain the original text by design. Set `UNREMEMBER_ENCRYPTION_KEY` (or `UNREMEMBER_ENCRYPTION_KEY_FILE`) to encrypt new backups and pending files with AES-256-GCM; losing the key makes rollback impossible. Use `unremember purge-backups` after verifying, and protect `~/.unremember` like any other sensitive local data.
 
 ## Scope
 

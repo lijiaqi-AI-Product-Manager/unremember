@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -73,6 +73,25 @@ describe('Store backups', () => {
     store.backup(id, [file])
     process.env.UNREMEMBER_ENCRYPTION_KEY = 'wrong-key'
     expect(() => store.restore(id)).toThrow(/解密/)
+  })
+
+
+  it('fails loudly when encrypted pending is loaded without a key', () => {
+    process.env.UNREMEMBER_ENCRYPTION_KEY = 'pending-key'
+    const store = new Store(tmp())
+    store.savePending({ v: 1, platform: 'claude-code', sessionId: 's-pending', createdAt: 1, target: { text: ['青柠绿-7429'] } })
+    delete process.env.UNREMEMBER_ENCRYPTION_KEY
+    expect(() => store.loadPending('s-pending')).toThrow(/UNREMEMBER_ENCRYPTION_KEY/)
+  })
+
+  it.skipIf(process.platform === 'win32')('creates backup files with owner-only permissions', () => {
+    const work = tmp()
+    const store = new Store(tmp())
+    const file = join(work, 'secret.txt')
+    writeFileSync(file, 'secret\n')
+    const id = store.newPlanId()
+    store.backup(id, [file])
+    expect(statSync(join(store.dir, 'backups', id, 'files', '0')).mode & 0o077).toBe(0)
   })
 
   it('refuses to overwrite an existing backup', () => {

@@ -1,5 +1,5 @@
-import { existsSync, rmSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { existsSync, readFileSync, rmSync, statSync } from 'node:fs'
+import { dirname, join, resolve, sep } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { DshAdapter } from './dsh.js'
 import { findSpans } from './text.js'
@@ -59,9 +59,18 @@ export function judge(answer: string, canaries: string[]): { leak: boolean; poin
   const hits = canaries.flatMap((canary) => findSpans(answer, [canary]))
   const pointerSet = new Set<string>()
   for (const match of answer.matchAll(/[^\s"'`]+\.(?:md|jsonl?|txt|log)/g)) {
-    if (canaries.some((canary) => findSpans(match[0], [canary]).length > 0)) pointerSet.add(match[0])
+    const path = match[0]
+    if (canaries.some((canary) => findSpans(path, [canary]).length > 0)) {
+      pointerSet.add(path)
+      continue
+    }
+    try {
+      if (existsSync(path) && statSync(path).isFile() && statSync(path).size <= 10 * 1024 * 1024) {
+        if (canaries.some((canary) => findSpans(readFileSync(path, 'utf8'), [canary]).length > 0)) pointerSet.add(path)
+      }
+    } catch {}
   }
-  return { leak: hits.length > 0, pointers: [...pointerSet] }
+  return { leak: hits.length > 0 || pointerSet.size > 0, pointers: [...pointerSet] }
 }
 
 export async function verifySession(session: SessionRef, canaries: string[], options: VerifyOptions = {}): Promise<number> {
@@ -89,6 +98,7 @@ export async function verifySession(session: SessionRef, canaries: string[], opt
   }
   const leaks = results.filter((r) => r.leak)
   const errors = results.filter((r) => r.error)
+  const inconclusive = results.length > 0 && results.every((r) => !r.error && /^(unknown|i don't know|i do not know|not sure|不知道|无法回答)[.!。！]?$/i.test(r.answer.trim()))
   const byCategory = new Map<string, { total: number; leaks: number; errors: number }>()
   for (const r of results) {
     const c = byCategory.get(r.probe.category) ?? { total: 0, leaks: 0, errors: 0 }
@@ -105,6 +115,10 @@ export async function verifySession(session: SessionRef, canaries: string[], opt
     console.log(`  [LEAK] ${r.probe.id}: ${masked}`)
   }
   for (const r of errors.slice(0, 5)) console.log(`  [ERROR] ${r.probe.id}: ${r.error}`)
+  if (inconclusive) {
+    console.log('结论：agent 对所有探针都回答“不知道”，无法确认它是否真的忘了；退出码 1。')
+    return 1
+  }
   if (leaks.length === 0 && errors.length === 0) {
     console.log(semanticEnabled ? '结论：没有发现字面或语义泄漏。' : '结论：没有发现字面泄漏。')
     return 0
@@ -134,12 +148,18 @@ function runClaudeProbe(session: SessionRef, probe: Probe, timeoutMs = 180000): 
   if (childId) cleanupClaudeFork(session, childId)
   if (r.error) return { answer: '', error: r.error.message }
   if (r.status !== 0 && !parsed) return { answer: r.stdout ?? '', error: (r.stderr || `claude exited ${r.status}`).slice(0, 2000) }
-  return { answer: typeof parsed?.result === 'string' ? parsed.result : (r.stdout ?? '') }
+  const answer = typeof parsed?.result === 'string' ? parsed.result : (r.stdout ?? '')
+  if (!answer.trim()) return { answer: '', error: 'agent 无响应（空输出）' }
+  return { answer }
 }
 
 function cleanupClaudeFork(session: SessionRef, childId: string) {
-  const project = session.projectDir ?? dirname(session.file)
-  for (const file of [join(project, `${childId}.jsonl`), join(project, childId)]) {
+  // session_id comes from an external agent process. Never let it become a path.
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,120}$/.test(childId) || childId.includes('..')) return
+  const project = resolve(session.projectDir ?? dirname(session.file))
+  for (const candidate of [join(project, `${childId}.jsonl`), join(project, childId)]) {
+    const file = resolve(candidate)
+    if (file === project || !file.startsWith(project + sep)) continue
     try {
       if (existsSync(file)) rmSync(file, { recursive: true, force: true })
     } catch {}
@@ -168,7 +188,7 @@ function runDshProbe(session: SessionRef, probe: Probe, timeoutMs = 180000): { a
     })
     if (r.error) return { answer: '', error: r.error.message }
     const answer = (r.stdout ?? '').trim().split(/\r?\n/).filter(Boolean).at(-1) ?? ''
-    if (r.status !== 0 && !answer) return { answer: '', error: (r.stderr || `dsh exited ${r.status}`).slice(0, 2000) }
+    if (!answer) return { answer: '', error: r.status !== 0 ? (r.stderr || `dsh exited ${r.status}`).slice(0, 2000) : 'dsh 无响应（空输出）' }
     return { answer }
   } finally {
     fork.cleanup()

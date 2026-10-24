@@ -41,13 +41,12 @@ export async function resumeSession(session: SessionRef, opts: { yes?: boolean; 
   }
   const template = process.env.UNREMEMBER_DSH_RESUME_CMD?.trim()
   if (template) {
-    const command = template
-      .replaceAll('{sessionId}', session.sessionId)
-      .replaceAll('{cwd}', session.cwd ?? process.cwd())
+    const cwd = session.cwd ?? process.cwd()
+    const command = renderDshResume(template, session.sessionId, cwd)
     console.log(`dsh 恢复：${command}`)
     const r = spawnSync(command, {
-      cwd: session.cwd ?? process.cwd(),
-      env: { ...process.env, UNREMEMBER_SESSION_ID: session.sessionId },
+      cwd,
+      env: { ...process.env, UNREMEMBER_SESSION_ID: session.sessionId, UNREMEMBER_SESSION_CWD: cwd },
       stdio: 'inherit',
       shell: true,
     })
@@ -56,4 +55,15 @@ export async function resumeSession(session: SessionRef, opts: { yes?: boolean; 
   console.log(`dsh 的恢复命令：dsh --profile ${process.env.DSH_PROFILE || 'web'} --session-id ${session.sessionId}`)
   console.log('提示：设置 UNREMEMBER_DSH_RESUME_CMD 可让 resume 直接执行你的 dsh 启动器；支持 {sessionId} / {cwd} 占位符。')
   return 0
+}
+
+export function renderDshResume(template: string, sessionId: string, cwd: string): string {
+  return template
+    .replaceAll('{sessionId}', shellQuote(sessionId))
+    .replaceAll('{cwd}', shellQuote(cwd))
+}
+
+function shellQuote(value: string): string {
+  if (process.platform === 'win32') return `"${value.replace(/"/g, '""').replace(/%/g, '%%')}"`
+  return `'${value.replace(/'/g, `'\\''`)}'`
 }

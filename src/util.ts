@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { lstatSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { extname, join } from 'node:path'
 
 export type JsonObject = Record<string, unknown>
@@ -91,10 +91,11 @@ export function listFiles(root: string, predicate: (file: string) => boolean = (
       const file = join(dir, name)
       let stat
       try {
-        stat = statSync(file)
+        stat = lstatSync(file)
       } catch {
         continue
       }
+      if (stat.isSymbolicLink()) continue
       if (stat.isDirectory()) walk(file)
       else if (stat.isFile() && predicate(file)) out.push(file)
     }
@@ -110,6 +111,7 @@ export function jsonLines(text: string): string[] {
 }
 
 export function parseJsonLines(text: string): unknown[] {
+  if (text.charCodeAt(0) === 0xfeff) text = text.slice(1)
   return jsonLines(text).map((line) => {
     try {
       return JSON.parse(line)

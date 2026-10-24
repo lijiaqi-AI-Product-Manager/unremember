@@ -43,7 +43,7 @@ npm install -g unremember
 unremember --version
 ```
 
-The registry serves **1.0.2** as `latest`. The GitHub Release below is the same 1.0.2 build.
+The registry currently serves **1.0.2** as `latest`. 1.0.3 is staged for maintainer 2FA approval; the GitHub Release below is the 1.0.3 build.
 
 One-shot:
 
@@ -56,7 +56,7 @@ npx unremember --version
 Download the latest package tarball from [Releases](https://github.com/lijiaqimun-coder/unremember/releases). The release asset is a ready-to-install package (built `dist/` included):
 
 ```bash
-npm install -g ./unremember-1.0.2.tgz
+npm install -g ./unremember-1.0.3.tgz
 unremember --version
 ```
 
@@ -101,7 +101,7 @@ npm link
 Release 包也可以用同样前缀下载：
 
 ```text
-https://ghproxy.net/https://github.com/lijiaqimun-coder/unremember/releases/download/v1.0.2/unremember-1.0.2.tgz
+https://ghproxy.net/https://github.com/lijiaqimun-coder/unremember/releases/download/v1.0.3/unremember-1.0.3.tgz
 ```
 
 ## Quick start
@@ -168,9 +168,11 @@ ops 7  files 4  residual 0
 | Command | Purpose |
 |---|---|
 | `doctor` | Print Node, config dirs, semantic/encryption state, backup and session counts. |
-| `sessions` | List Claude Code / dsh sessions. `--platform cc\|dsh`, `--cwd`, `--json`. |
+| `sessions` | List Claude Code / dsh sessions. `--platform cc\|dsh`, `--cwd`, `--json`, `--show-preview`. Previews are masked by default. |
 | `pending` | Store a confirmed skill request under `~/.unremember/pending/` for `resume`. |
 | `plan` | Dry-run. Scan stores, build ops, simulate residual, write a plan. `--text`, `--message`, `--about`, `--scope`, `--semantic`, `--json`, `--yes`. |
+| `plans` | List saved plan ids. |
+| `purge-plans` | Delete plan files permanently (requires `--yes`). |
 | `apply` | Execute a plan after live check, hash check and backup. Requires `--yes`. |
 | `verify` | Run 20 probes on a fork. Exit 0 = no literal leak; 1 = leak/error. |
 | `resume` | Consume a pending request, apply it, then resume Claude Code. dsh runs `UNREMEMBER_DSH_RESUME_CMD` when set, otherwise prints the profile-aware command. |
@@ -251,7 +253,7 @@ export UNREMEMBER_SEMANTIC_MODEL="deepseek-chat"
 export UNREMEMBER_SEMANTIC_API_KEY="..."
 ```
 
-`UNREMEMBER_SEMANTIC_BASE_URL` may also point at a local Ollama/LM Studio gateway. `plan --semantic` sends candidate excerpts (up to 512 KB, never the whole transcript) to that endpoint and requires `--yes`; `verify --semantic` also asks the endpoint to judge non-literal answers. Credentials are read from the environment, never written to disk.
+`UNREMEMBER_SEMANTIC_BASE_URL` may also point at a local Ollama/LM Studio gateway. `plan --semantic` sends the target description, the literal hints (which can include the target itself), and candidate excerpts (up to 512 KB, never the whole transcript) to that endpoint; it requires `--yes`. `verify --semantic` also sends the canary to the endpoint for the non-literal judge. Credentials are read from the environment, never written to disk. If that disclosure is not acceptable, do not enable semantic mode.
 
 If no endpoint is configured, `--semantic` fails clearly instead of pretending to be semantic.
 

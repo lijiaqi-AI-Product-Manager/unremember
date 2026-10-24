@@ -6,19 +6,22 @@ import { findSession, listSessions } from './sessions.js'
 import { Store } from './store.js'
 import { claudeConfigDir, dshHome } from './paths.js'
 import { semanticConfig } from './semantic.js'
+import { mask } from './text.js'
 import type { Platform, PlanOptions, Target } from './types.js'
 import { verifySession } from './verify.js'
 import { resumeSession } from './resume.js'
 
-const VERSION = '1.0.2'
+const VERSION = '1.0.3'
 
 const USAGE = `unremember — 让 agent 真的忘掉一件事
 
 用法：
   unremember doctor
-  unremember sessions [--platform cc|dsh] [--cwd <目录>] [--json]
+  unremember sessions [--platform cc|dsh] [--cwd <目录>] [--json] [--show-preview]
   unremember pending <会话> (--text <内容>... | --message <id>... | --about <描述>)
   unremember plan <会话> (--text <内容>... | --message <id>... | --about <描述>) [--scope turn|span] [--semantic] [--json]
+  unremember plans
+  unremember purge-plans [<plan-id>] --yes
   unremember apply <plan-id> [--yes]
   unremember verify <会话> --canary <内容>... [--probes 20] [--semantic]
   unremember resume <会话> [--yes]
@@ -45,6 +48,7 @@ async function main(argv: string[]): Promise<number> {
       scope: { type: 'string' },
       semantic: { type: 'boolean' },
       json: { type: 'boolean' },
+      'show-preview': { type: 'boolean' },
       yes: { type: 'boolean' },
       version: { type: 'boolean', short: 'v' },
       help: { type: 'boolean', short: 'h' },
@@ -69,7 +73,8 @@ async function main(argv: string[]): Promise<number> {
       const platform = parsePlatform(values.platform)
       const list = listSessions({ platform, cwd: values.cwd })
       if (values.json) {
-        console.log(JSON.stringify(list, null, 2))
+        const safe = list.map(({ preview, ...rest }) => (values['show-preview'] ? { ...rest, preview } : rest))
+        console.log(JSON.stringify(safe, null, 2))
         return 0
       }
       if (!list.length) {
@@ -79,7 +84,7 @@ async function main(argv: string[]): Promise<number> {
       for (const s of list) {
         const when = s.updatedAt ? new Date(s.updatedAt).toLocaleString() : '时间未知'
         console.log(`${s.platform.padEnd(10)} ${s.sessionId}  ${when}`)
-        if (s.preview) console.log(`  ${s.preview}`)
+        if (s.preview) console.log(`  ${values['show-preview'] ? s.preview : mask(s.preview)}`)
         if (s.projectDir) console.log(`  ${s.projectDir}`)
       }
       return 0
@@ -121,7 +126,7 @@ async function main(argv: string[]): Promise<number> {
       const scope = values.scope === undefined ? 'turn' : values.scope
       if (scope !== 'turn' && scope !== 'span') return fail('--scope 只能是 turn 或 span。')
       if (values.semantic && !values.yes) {
-        console.error('--semantic 会把候选摘录发送到配置的模型接口。检查环境变量后加 --yes 确认。')
+        console.error('--semantic 会把目标/字面提示（含 canary 原文）和候选摘录发送到配置的模型接口。检查环境变量后加 --yes 确认。')
         return 1
       }
       const options: PlanOptions = { semantic: values.semantic, scope }
@@ -141,6 +146,23 @@ async function main(argv: string[]): Promise<number> {
         if (plan.blockers.length) console.log('存在 blockers；apply 会拒绝执行。')
       }
       return plan.blockers.length ? 1 : 0
+    }
+    case 'plans': {
+      const ids = store.listPlans()
+      if (!ids.length) console.log('没有计划。')
+      else for (const id of ids) console.log(id)
+      return 0
+    }
+    case 'purge-plans': {
+      const ids = rest[0] ? [rest[0]] : store.listPlans()
+      if (!ids.length) {
+        console.log('没有计划。')
+        return 0
+      }
+      if (!values.yes) return fail(`将永久删除 ${ids.length} 份计划；确认请加 --yes。`)
+      for (const id of ids) store.purgePlan(id)
+      console.log(`已删除 ${ids.length} 份计划。`)
+      return 0
     }
     case 'apply': {
       const id = rest[0]

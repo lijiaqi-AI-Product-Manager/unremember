@@ -117,6 +117,25 @@ describe('DshAdapter', () => {
     expect(readDshLog(file).split('\n')[0]).toContain('"type":"session"')
   })
 
+
+  it('honors --scope span for dsh instead of blanking the whole text field', async () => {
+    const root = temp()
+    const dir = join(root, 'sessions', '--C-fixture-work--', 'session-span')
+    mkdirSync(dir, { recursive: true })
+    const file = join(dir, 'session.v4.jsonl')
+    const entries = [
+      { type: 'session', version: 4, id: 'session-span', createdAt: 1, cwd: 'C:\\fixture-work' },
+      { type: 'user/message', seq: 0, time: 1, data: { content: [{ type: 'text', text: 'prefix 青柠绿-7429 suffix' }], role: 'user' } },
+    ]
+    writeFileSync(file, entries.map((e) => JSON.stringify(e)).join('\n') + '\n')
+    const adapter = new DshAdapter(root)
+    const session = adapter.listSessions()[0]!
+    const target = { text: ['青柠绿-7429'] }
+    const { draft } = await adapter.plan(session, target, { scope: 'span' })
+    expect(draft.ops.some((op) => op.op === 'redact-span' && op.pointer === '/data/content/0/text')).toBe(true)
+    expect(draft.ops.some((op) => op.op === 'blank-field' && op.pointer === '/data/content/0/text')).toBe(false)
+  })
+
   it('blanks message fields without changing seq and keeps the log resumable in shape', async () => {
     const root = temp()
     const dir = join(root, 'sessions', '--C-fixture-work--', 'session-test')

@@ -73,7 +73,8 @@ export async function semanticLocate(
       },
     ])
     const parsed = parseJson(reply)
-    const hits = Array.isArray(parsed?.hits) ? parsed.hits : []
+    if (!parsed) throw new Error('semantic provider 返回了无法解析的定位结果')
+    const hits = Array.isArray(parsed.hits) ? parsed.hits : []
     for (const raw of hits) {
       const obj = raw as Record<string, unknown>
       const id = typeof obj.id === 'string' ? obj.id : ''
@@ -112,7 +113,8 @@ export async function semanticJudge(answer: string, target: string, hints: strin
     },
   ])
   const parsed = parseJson(reply)
-  return parsed?.leak === true
+  if (!parsed || typeof parsed.leak !== 'boolean') throw new Error('semantic judge 返回了无法解析的判定')
+  return parsed.leak
 }
 
 function requireConfig(): SemanticConfig {

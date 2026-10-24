@@ -12,5 +12,6 @@ export function applyPlan(plan: Plan, store = new Store()): void {
     ? dirname(dirname(dirname(plan.session.file)))
     : dirname(dirname(dirname(dirname(plan.session.file))))
   const adapter = plan.session.platform === 'claude-code' ? new ClaudeAdapter(root) : new DshAdapter(root)
-  applyPlanWithLive(plan, store, (session) => adapter.liveState(session))
+  const allowed = adapter.stores(plan.session).map((s) => s.path)
+  applyPlanWithLive(plan, store, (session) => adapter.liveState(session), [...allowed, plan.session.file])
 }

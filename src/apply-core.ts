@@ -1,4 +1,5 @@
-﻿import { readFileSync, rmSync } from 'node:fs'
+﻿import { existsSync, lstatSync, readFileSync, rmSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { applyToJsonl, applyToText } from './ops.js'
 import { JsonlFile, encodeDshLog, readDshLog, sha256File, writeAtomic } from './fsx.js'
 import { Store } from './store.js'
@@ -14,18 +15,24 @@ export function applyPlanWithLive(
   plan: Plan,
   store: Store,
   liveState: (session: SessionRef) => LiveState,
+  allowedPaths: string[],
 ): void {
   const live = liveState(plan.session)
   if (live !== 'idle') throw new Error(live === 'live' ? '会话正在运行，拒绝执行' : '无法确认会话是否在运行，按运行中处理')
 
+  const allowed = new Set(allowedPaths.map((p) => resolve(p)))
   for (const file of plan.files) {
-    const current = sha256File(file.path)
+    const path = resolve(file.path)
+    if (!allowed.has(path)) throw new Error(`计划路径不在当前会话的 store 集合内，拒绝执行：${file.path}`)
+    if (existsSync(path) && lstatSync(path).isSymbolicLink()) throw new Error(`拒绝修改符号链接：${file.path}`)
+    const current = sha256File(path)
     if (current !== file.sha256Before) throw new Error(`文件在出计划后被改过：${file.path}`)
   }
 
   const paths = [...new Set([...plan.files.map((f) => f.path), ...plan.ops.map((op) => op.store.path)])]
   for (const path of paths) {
-    if (!plan.files.some((f) => f.path === path)) throw new Error(`计划没有记录文件哈希：${path}`)
+    if (!allowed.has(resolve(path))) throw new Error(`计划路径不在当前会话的 store 集合内，拒绝执行：${path}`)
+    if (!plan.files.some((f) => resolve(f.path) === resolve(path))) throw new Error(`计划没有记录文件哈希：${path}`)
   }
   store.backup(plan.id, paths)
   const byPath = new Map<string, Op[]>()
@@ -58,7 +65,9 @@ export function applyPlanWithLive(
   } catch (error) {
     try {
       store.restore(plan.id)
-    } catch {}
+    } catch (restoreError) {
+      throw new Error(`${error instanceof Error ? error.message : String(error)}；自动恢复失败：${restoreError instanceof Error ? restoreError.message : String(restoreError)}；备份仍在 ~/.unremember/backups/${plan.id}`)
+    }
     throw error
   }
   store.journal({ t: Date.now(), action: 'apply', planId: plan.id, files: paths.length, ops: plan.ops.length })

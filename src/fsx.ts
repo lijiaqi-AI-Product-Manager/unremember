@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { constants, zstdCompressSync, zstdDecompressSync } from 'node:zlib'
 
@@ -15,8 +15,10 @@ export function sha256File(file: string): string | null {
 export function writeAtomic(file: string, data: string | Buffer) {
   mkdirSync(dirname(file), { recursive: true })
   const tmp = `${file}.${process.pid}.${Math.random().toString(36).slice(2)}.tmp`
-  writeFileSync(tmp, data)
+  const mode = existsSync(file) ? statSync(file).mode & 0o777 : 0o600
+  writeFileSync(tmp, data, { mode })
   try {
+    try { chmodSync(tmp, mode) } catch {}
     renameSync(tmp, file)
   } catch (error) {
     rmSync(tmp, { force: true })
@@ -30,6 +32,7 @@ export function writeAtomic(file: string, data: string | Buffer) {
  */
 export class JsonlFile {
   readonly raw: string[]
+  readonly torn = new Set<number>()
   readonly eol: '\n' | '\r\n'
   private readonly finalEol: boolean
   private readonly parsed = new Map<number, unknown>()
@@ -37,9 +40,10 @@ export class JsonlFile {
   private readonly dirty = new Set<number>()
 
   constructor(text: string) {
-    this.eol = text.includes('\r\n') ? '\r\n' : '\n'
-    this.finalEol = text.endsWith('\n')
-    const lines = text.split(/\r?\n/)
+    const clean = text.charCodeAt(0) === 0xfeff ? text.slice(1) : text
+    this.eol = clean.includes('\r\n') ? '\r\n' : '\n'
+    this.finalEol = clean.endsWith('\n')
+    const lines = clean.split(/\r?\n/)
     if (lines.length && lines[lines.length - 1] === '') lines.pop()
     this.raw = lines
   }
@@ -59,6 +63,7 @@ export class JsonlFile {
       try {
         value = this.raw[i]?.trim() ? JSON.parse(this.raw[i]!) : undefined
       } catch {
+        if (this.raw[i]?.trim()) this.torn.add(i)
         value = undefined
       }
       this.parsed.set(i, value)

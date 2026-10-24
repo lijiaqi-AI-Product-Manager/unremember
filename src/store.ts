@@ -12,8 +12,8 @@ import {
   rmSync,
   writeFileSync,
 } from 'node:fs'
-import { join } from 'node:path'
-import { sha256File, writeAtomic } from './fsx.js'
+import { join, resolve, sep } from 'node:path'
+import { sha256, sha256File, writeAtomic } from './fsx.js'
 import { dataHome } from './paths.js'
 import type { Plan, Platform, Target } from './types.js'
 
@@ -82,11 +82,22 @@ export class Store {
     }
   }
 
+  listPlans(): string[] {
+    const root = join(this.dir, 'plans')
+    if (!existsSync(root)) return []
+    return readdirSync(root).filter((f) => f.endsWith('.json')).map((f) => f.slice(0, -5)).sort()
+  }
+
+  purgePlan(id: string) {
+    rmSync(this.planFile(id), { force: true })
+  }
+
   /** Copy every file (or record its absence) before apply touches it. */
   backup(planId: string, paths: string[], now = Date.now()): BackupManifest {
     const dir = this.backupDir(planId)
     if (existsSync(join(dir, 'manifest.json'))) throw new Error(`backup for ${planId} already exists`)
-    mkdirSync(join(dir, 'files'), { recursive: true })
+    mkdirSync(join(dir, 'files'), { recursive: true, mode: 0o700 })
+    try { chmodSync(dir, 0o700) } catch {}
     const passphrase = encryptionPassphrase()
     const salt = passphrase ? randomBytes(16) : undefined
     const key = passphrase && salt ? scryptSync(passphrase, salt, 32) : undefined
@@ -99,10 +110,12 @@ export class Store {
         const iv = randomBytes(12)
         const cipher = createCipheriv('aes-256-gcm', key, iv)
         const encrypted = Buffer.concat([cipher.update(plain), cipher.final()])
-        writeFileSync(join(dir, copy), encrypted)
+        writeFileSync(join(dir, copy), encrypted, { mode: 0o600 })
+        try { chmodSync(join(dir, copy), 0o600) } catch {}
         return { path, sha256: sha, copy, iv: iv.toString('base64'), tag: cipher.getAuthTag().toString('base64') }
       }
       copyFileSync(path, join(dir, copy))
+      try { chmodSync(join(dir, copy), 0o600) } catch {}
       return { path, sha256: sha, copy }
     })
     const manifest: BackupManifest = { v: 1, planId, createdAt: now, ...(key ? { encrypted: true, salt: salt!.toString('base64') } : {}), files }
@@ -128,7 +141,9 @@ export class Store {
       if (f.sha256 === null) {
         rmSync(f.path, { force: true })
       } else {
-        const raw = readFileSync(join(this.backupDir(planId), f.copy!))
+        const copy = resolve(this.backupDir(planId), f.copy!)
+        if (!copy.startsWith(resolve(this.backupDir(planId)) + sep)) throw new Error(`备份路径越界：${f.copy}`)
+        const raw = readFileSync(copy)
         const plain = manifest.encrypted ? decryptBackup(raw, manifest, f) : raw
         writeAtomic(f.path, plain)
         if (sha256File(f.path) !== f.sha256) mismatched.push(f.path)
@@ -152,8 +167,10 @@ export class Store {
   }
 
   journal(entry: JournalEntry) {
-    mkdirSync(this.dir, { recursive: true })
-    appendFileSync(join(this.dir, 'journal.jsonl'), JSON.stringify(entry) + '\n')
+    mkdirSync(this.dir, { recursive: true, mode: 0o700 })
+    const file = join(this.dir, 'journal.jsonl')
+    appendFileSync(file, JSON.stringify(entry) + '\n', { mode: 0o600 })
+    try { chmodSync(file, 0o600) } catch {}
   }
 
   /** A skill writes this while the session is still live; resume consumes it. */
@@ -208,7 +225,8 @@ function safeSegment(value: string): boolean {
 }
 
 function safeSessionSegment(value: string): string {
-  return value.replace(/[^A-Za-z0-9._-]/g, '_').slice(0, 120)
+  const safe = value.replace(/[^A-Za-z0-9._-]/g, '_').slice(0, 100)
+  return safe === value ? safe : `${safe}-${sha256(value).slice(0, 8)}`
 }
 
 function encryptionPassphrase(): string | undefined {
@@ -239,11 +257,18 @@ function decryptBackup(raw: Buffer, manifest: BackupManifest, f: BackupManifest[
 }
 
 function readPendingFile(file: string): PendingRequest | undefined {
+  let raw: string
   try {
-    const parsed = JSON.parse(readFileSync(file, 'utf8')) as Record<string, any>
+    raw = readFileSync(file, 'utf8')
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException)?.code === 'ENOENT') return undefined
+    throw error
+  }
+  try {
+    const parsed = JSON.parse(raw) as Record<string, any>
     if (parsed?.encrypted === true && typeof parsed.payload === 'string') {
       const passphrase = encryptionPassphrase()
-      if (!passphrase) return undefined
+      if (!passphrase) throw new Error('pending 请求已加密，请设置 UNREMEMBER_ENCRYPTION_KEY 或 _FILE')
       const key = scryptSync(passphrase, Buffer.from(String(parsed.salt), 'base64'), 32)
       const decipher = createDecipheriv('aes-256-gcm', key, Buffer.from(String(parsed.iv), 'base64'))
       decipher.setAuthTag(Buffer.from(String(parsed.tag), 'base64'))
@@ -251,7 +276,8 @@ function readPendingFile(file: string): PendingRequest | undefined {
       return JSON.parse(plain) as PendingRequest
     }
     return parsed as PendingRequest
-  } catch {
-    return undefined
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('pending 请求已加密')) throw error
+    throw new Error('pending 请求无法解析或解密')
   }
 }

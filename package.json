@@ -1,6 +1,6 @@
 {
   "name": "unremember",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Make a local coding agent truly forget something: remove it from the session, its echoes and its off-session copies (memory, prompt history), then prove it with leak probes.",
   "type": "module",
   "license": "MIT",
@@ -11,7 +11,7 @@
   "homepage": "https://github.com/lijiaqimun-coder/unremember#readme",
   "bugs": "https://github.com/lijiaqimun-coder/unremember/issues",
   "bin": {
-    "unremember": "dist/cli.js"
+    "unremember": "dist/guard.js"
   },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
