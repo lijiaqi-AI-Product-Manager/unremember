@@ -331,3 +331,33 @@ Tests use synthetic sessions and temporary directories. Real sessions, credentia
 ## License
 
 MIT. See [LICENSE](https://github.com/lijiaqimun-coder/unremember/blob/main/LICENSE).
+
+<!-- project-growth:start -->
+
+## Project growth
+
+Star history updates daily. Refresh dates use UTC; Star dates follow GitHub's aggregates. Daily npm download requests are also shown.
+
+<a href="https://github.com/lijiaqi-AI-Product-Manager/unremember/stargazers">
+<picture>
+  <source media="(max-width: 600px) and (prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/lijiaqi-AI-Product-Manager/lijiaqi-AI-Product-Manager/main/assets/growth/unremember/stars-mobile-dark.svg">
+  <source media="(max-width: 600px)" srcset="https://raw.githubusercontent.com/lijiaqi-AI-Product-Manager/lijiaqi-AI-Product-Manager/main/assets/growth/unremember/stars-mobile-light.svg">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/lijiaqi-AI-Product-Manager/lijiaqi-AI-Product-Manager/main/assets/growth/unremember/stars-dark.svg">
+  <img src="https://raw.githubusercontent.com/lijiaqi-AI-Product-Manager/lijiaqi-AI-Product-Manager/main/assets/growth/unremember/stars-light.svg" width="960" alt="unremember · GitHub Star history">
+</picture>
+</a>
+
+<a href="https://www.npmjs.com/package/unremember">
+<picture>
+  <source media="(max-width: 600px) and (prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/lijiaqi-AI-Product-Manager/lijiaqi-AI-Product-Manager/main/assets/growth/unremember/downloads-mobile-dark.svg">
+  <source media="(max-width: 600px)" srcset="https://raw.githubusercontent.com/lijiaqi-AI-Product-Manager/lijiaqi-AI-Product-Manager/main/assets/growth/unremember/downloads-mobile-light.svg">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/lijiaqi-AI-Product-Manager/lijiaqi-AI-Product-Manager/main/assets/growth/unremember/downloads-dark.svg">
+  <img src="https://raw.githubusercontent.com/lijiaqi-AI-Product-Manager/lijiaqi-AI-Product-Manager/main/assets/growth/unremember/downloads-light.svg" width="960" alt="unremember · Daily download requests">
+</picture>
+</a>
+
+Download requests include repeated and automated traffic; they are not unique or active users.
+
+[Data sources and metric definitions](https://github.com/lijiaqi-AI-Product-Manager/lijiaqi-AI-Product-Manager/blob/main/docs/growth.md)
+
+<!-- project-growth:end -->
